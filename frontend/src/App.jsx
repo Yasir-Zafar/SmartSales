@@ -1,0 +1,51 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { LoginPage } from './pages/LoginPage';
+import { OwnerDashboard } from './pages/OwnerDashboard';
+import { AnalystDashboard } from './pages/AnalystDashboard';
+import { StaffDashboard } from './pages/StaffDashboard';
+import { AdminDashboard } from './pages/AdminDashboard';
+import { AdminCreateUser } from './pages/AdminCreateUser';
+
+// --- MAIN APP ---
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/owner" element={
+            <ProtectedRoute roles={['OWNER']}>
+              <OwnerDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/analyst" element={
+            <ProtectedRoute roles={['ANALYST']}>
+              <AnalystDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/staff" element={
+            <ProtectedRoute roles={['STAFF']}>
+              <StaffDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin" element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/create-user" element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <AdminCreateUser />
+            </ProtectedRoute>
+          } />
+          <Route path="/" element={<Navigate to="/login" />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
+}
+
+export default App;
