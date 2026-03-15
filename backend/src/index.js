@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import authLoginRoutes from "./routes/authLoginRoutes.js";
 import adminEndpointRoutes from "./routes/adminEndpointRoutes.js";
 import currentUserRoutes from "./routes/currentUserRoutes.js";
+import csvRoutes from "./routes/csvRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,6 +26,9 @@ app.use('/api/me', currentUserRoutes);
 app.get('/', (req, res) => {
   res.send('SmartSales API is running');
 });
+
+//upload daily sales and see history
+app.use('/api/csv', csvRoutes);
 
 //--------------------------------------------------------------------------------------------------
 // Error handling middleware
