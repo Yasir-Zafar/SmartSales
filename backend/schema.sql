@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   name TEXT,
   role TEXT CHECK (role IN ('ADMIN','OWNER','ANALYST','STAFF')),
   active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  last_logged_in TIMESTAMP
 );
 
 -- Sales table

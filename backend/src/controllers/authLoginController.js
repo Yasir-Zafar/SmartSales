@@ -29,6 +29,17 @@ export async function loginEndpointSupabaseAuth(req, res) {
       return res.status(403).json({ message: 'Account is deactivated' });
     }
 
+    // Update last logged in timestamp (best-effort, don’t block login)
+    const lastLoggedIn = new Date().toISOString();
+    const { error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({ last_logged_in: lastLoggedIn })
+      .eq('id', authData.user.id);
+
+    if (updateError) {
+      console.error('Last login update error:', updateError);
+    }
+
     // Return Supabase session token
     res.json({
       token: authData.session.access_token,
@@ -36,7 +47,8 @@ export async function loginEndpointSupabaseAuth(req, res) {
         id: authData.user.id,
         email: authData.user.email,
         role: profile.role,
-        name: profile.name
+        name: profile.name,
+        last_logged_in: lastLoggedIn
       }
     });
   } catch (err) {

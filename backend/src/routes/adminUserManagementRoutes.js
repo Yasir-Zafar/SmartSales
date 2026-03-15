@@ -5,12 +5,14 @@ import {
   findUserByEmail,
   resetUserPassword,
   updateUserRole,
-  updateUserStatus
+  updateUserStatus,
+  getAllUsers
 } from '../controllers/adminUserManagementController.js';
 
 // All routes here are ADMIN-only
 router.use(authenticateToken, authorizeRoles('ADMIN'));
 
+router.get('/list', getAllUsers);
 router.post('/find-by-email', findUserByEmail);
 router.patch('/:id/password', resetUserPassword);
 router.patch('/:id/role', updateUserRole);

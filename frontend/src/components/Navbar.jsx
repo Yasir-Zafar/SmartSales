@@ -27,6 +27,7 @@ export const Navbar = () => {
         {user?.role === 'ADMIN' && (
           <>
             <Link to="/admin" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
+            <Link to="/admin/view-users" className="text-gray-400 hover:text-gray-200 transition-colors">View Users</Link>
             <Link to="/admin/create-user" className="text-gray-400 hover:text-gray-200 transition-colors">Create User</Link>
             <Link to="/admin/edit-user" className="text-gray-400 hover:text-gray-200 transition-colors">Edit User</Link>
           </>

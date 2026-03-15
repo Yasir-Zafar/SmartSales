@@ -9,6 +9,7 @@ import { StaffDashboard } from './pages/StaffDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminCreateUser } from './pages/AdminCreateUser';
 import { AdminEditUser } from './pages/AdminEditUser';
+import { AdminViewUsers } from './pages/AdminViewUsers';
 
 // --- MAIN APP ---
 function App() {
@@ -35,6 +36,11 @@ function App() {
           <Route path="/admin" element={
             <ProtectedRoute roles={['ADMIN']}>
               <AdminDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/view-users" element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <AdminViewUsers />
             </ProtectedRoute>
           } />
           <Route path="/admin/create-user" element={

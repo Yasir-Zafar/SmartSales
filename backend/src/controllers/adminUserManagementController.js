@@ -145,6 +145,51 @@ export async function updateUserRole(req, res) {
   }
 }
 
+export async function getAllUsers(req, res) {
+  try {
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000
+    });
+
+    if (authError) {
+      console.error('List users error:', authError);
+      return res.status(500).json({ message: 'Failed to list users' });
+    }
+
+    const { data: profiles, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('*');
+
+    if (profileError) {
+      console.error('Profiles lookup error:', profileError);
+      return res.status(500).json({ message: 'Failed to fetch profiles' });
+    }
+
+    const profileById = profiles.reduce((acc, profile) => {
+      acc[profile.id] = profile;
+      return acc;
+    }, {});
+
+    const users = (authData.users || []).map((u) => {
+      const profile = profileById[u.id] || {};
+      return {
+        id: u.id,
+        email: u.email,
+        name: profile.name || '',
+        role: profile.role || 'UNKNOWN',
+        active: profile.active === undefined ? true : profile.active,
+        last_logged_in: profile.last_logged_in || null
+      };
+    });
+
+    return res.json({ users });
+  } catch (err) {
+    console.error('Get all users exception:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+}
+
 export async function updateUserStatus(req, res) {
   const { id } = req.params;
   const { active } = req.body;
