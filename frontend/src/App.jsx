@@ -8,6 +8,7 @@ import { AnalystDashboard } from './pages/AnalystDashboard';
 import { StaffDashboard } from './pages/StaffDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminCreateUser } from './pages/AdminCreateUser';
+import { AdminEditUser } from './pages/AdminEditUser';
 
 // --- MAIN APP ---
 function App() {
@@ -39,6 +40,11 @@ function App() {
           <Route path="/admin/create-user" element={
             <ProtectedRoute roles={['ADMIN']}>
               <AdminCreateUser />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/edit-user" element={
+            <ProtectedRoute roles={['ADMIN']}>
+              <AdminEditUser />
             </ProtectedRoute>
           } />
           <Route path="/" element={<Navigate to="/login" />} />

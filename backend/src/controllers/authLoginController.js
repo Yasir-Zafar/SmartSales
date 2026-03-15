@@ -25,6 +25,10 @@ export async function loginEndpointSupabaseAuth(req, res) {
       return res.status(401).json({ message: 'Profile not found' });
     }
 
+    if (profile.active === false) {
+      return res.status(403).json({ message: 'Account is deactivated' });
+    }
+
     // Return Supabase session token
     res.json({
       token: authData.session.access_token,

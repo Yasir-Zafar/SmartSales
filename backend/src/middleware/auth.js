@@ -26,6 +26,10 @@ const authenticateToken = async (req, res, next) => {
       return res.status(403).json({ message: 'Profile not found' });
     }
 
+    if (profile.active === false) {
+      return res.status(403).json({ message: 'Account is deactivated' });
+    }
+
     req.user = {
       id: user.id,
       email: user.email,

@@ -4,6 +4,7 @@ import cors from "cors";
 import jwt from 'jsonwebtoken';
 import authLoginRoutes from "./routes/authLoginRoutes.js";
 import adminEndpointRoutes from "./routes/adminEndpointRoutes.js";
+import adminUserManagementRoutes from "./routes/adminUserManagementRoutes.js";
 import currentUserRoutes from "./routes/currentUserRoutes.js";
 import csvRoutes from "./routes/csvRoutes.js";
 
@@ -18,6 +19,9 @@ app.use('/api/auth/login', authLoginRoutes);
 
 // Admin-only user creation endpoint
 app.use('/api/admin/create-user', adminEndpointRoutes);
+
+// Admin-only user management endpoints
+app.use('/api/admin/users', adminUserManagementRoutes);
 
 // Get current user profile
 app.use('/api/me', currentUserRoutes);
