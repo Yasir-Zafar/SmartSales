@@ -2,16 +2,16 @@
   "name": "smartsales-backend",
   "version": "0.1.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js",
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "Your Name <mntbnd720@proton.me>",
   "license": "MIT",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "2.98.0",
     "bcryptjs": "3.0.3",
@@ -20,6 +20,7 @@
     "dotenv": "17.3.1",
     "express": "5.2.1",
     "jsonwebtoken": "9.0.3",
-    "multer": "2.1.1"
+    "multer": "2.1.1",
+    "nodemon": "^3.1.14"
   }
 }
