@@ -4,21 +4,30 @@ import { Navbar } from '../components/Navbar';
 
 export const StaffDashboard = () => {
   const { user } = useAuth();
-  const [modalOpen, setModalOpen] = useState(false);
+
+  // Upload modal state
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const fileInputRef = useRef(null);
 
-  const openModal = () => {
+  // History modal state
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
+
+  // --- Upload Modal ---
+  const openUploadModal = () => {
     setSelectedFile(null);
     setUploadResult(null);
-    setModalOpen(true);
+    setUploadModalOpen(true);
   };
 
-  const closeModal = () => {
+  const closeUploadModal = () => {
     if (uploading) return;
-    setModalOpen(false);
+    setUploadModalOpen(false);
     setSelectedFile(null);
     setUploadResult(null);
   };
@@ -36,7 +45,6 @@ export const StaffDashboard = () => {
 
   const handleUpload = async () => {
     if (!selectedFile) return;
-
     setUploading(true);
     setUploadResult(null);
 
@@ -50,24 +58,54 @@ export const StaffDashboard = () => {
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-
       const data = await res.json();
-
       if (res.ok) {
         setUploadResult({ success: true, message: data.message });
         setSelectedFile(null);
       } else {
-        setUploadResult({
-          success: false,
-          message: data.message || 'Upload failed.',
-          errors: data.errors || [],
-        });
+        setUploadResult({ success: false, message: data.message || 'Upload failed.', errors: data.errors || [] });
       }
     } catch (err) {
       setUploadResult({ success: false, message: 'Network error. Could not reach the server.' });
     } finally {
       setUploading(false);
     }
+  };
+
+  // --- History Modal ---
+  const openHistoryModal = async () => {
+    setHistoryModalOpen(true);
+    setHistoryLoading(true);
+    setHistoryError(null);
+
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch('http://localhost:5000/api/csv', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setHistory(data.uploads || []);
+      } else {
+        setHistoryError(data.message || 'Failed to load history.');
+      }
+    } catch (err) {
+      setHistoryError('Network error. Could not reach the server.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const closeHistoryModal = () => {
+    setHistoryModalOpen(false);
+    setHistory([]);
+    setHistoryError(null);
+  };
+
+  const statusColor = (status) => {
+    if (status === 'processed') return 'text-teal-400';
+    if (status === 'failed') return 'text-red-400';
+    return 'text-yellow-400';
   };
 
   return (
@@ -81,15 +119,26 @@ export const StaffDashboard = () => {
             <h2 className="text-2xl font-semibold text-gray-50">Staff Dashboard</h2>
             <p className="text-gray-400 mt-2">Welcome, {user?.email}</p>
           </div>
-          <button
-            onClick={openModal}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4" />
-            </svg>
-            Upload Daily Sales CSV
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={openHistoryModal}
+              className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Upload History
+            </button>
+            <button
+              onClick={openUploadModal}
+              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4" />
+              </svg>
+              Upload Daily Sales CSV
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -120,24 +169,18 @@ export const StaffDashboard = () => {
       </div>
 
       {/* Upload Modal */}
-      {modalOpen && (
+      {uploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-
-            {/* Modal Header */}
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-50">Upload Daily Sales CSV</h3>
-              <button
-                onClick={closeModal}
-                className="text-gray-400 hover:text-gray-200 transition-colors"
-              >
+              <button onClick={closeUploadModal} className="text-gray-400 hover:text-gray-200 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* File Picker */}
             <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-gray-600 hover:border-teal-500 rounded-xl p-8 text-center cursor-pointer transition-colors group"
@@ -153,16 +196,9 @@ export const StaffDashboard = () => {
                   <p className="text-gray-500 text-sm mt-1">Only .csv files are accepted</p>
                 </>
               )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                onChange={handleFileChange}
-                className="hidden"
-              />
+              <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
             </div>
 
-            {/* Result Message */}
             {uploadResult && (
               <div className={`mt-4 p-3 rounded-lg text-sm ${uploadResult.success ? 'bg-teal-900/50 text-teal-300' : 'bg-red-900/50 text-red-300'}`}>
                 <p className="font-medium">{uploadResult.message}</p>
@@ -174,13 +210,8 @@ export const StaffDashboard = () => {
               </div>
             )}
 
-            {/* Actions */}
             <div className="flex gap-3 mt-6">
-              <button
-                onClick={closeModal}
-                disabled={uploading}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium py-2 rounded-lg transition-colors disabled:opacity-50"
-              >
+              <button onClick={closeUploadModal} disabled={uploading} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium py-2 rounded-lg transition-colors disabled:opacity-50">
                 Cancel
               </button>
               <button
@@ -199,7 +230,61 @@ export const StaffDashboard = () => {
                 ) : 'Upload'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
 
+      {/* History Modal */}
+      {historyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-50">CSV Upload History</h3>
+              <button onClick={closeHistoryModal} className="text-gray-400 hover:text-gray-200 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {historyLoading ? (
+              <div className="text-center py-10 text-gray-400">Loading...</div>
+            ) : historyError ? (
+              <div className="text-center py-10 text-red-400">{historyError}</div>
+            ) : history.length === 0 ? (
+              <div className="text-center py-10 text-gray-500">No uploads yet.</div>
+            ) : (
+              <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="sticky top-0 bg-gray-800">
+                    <tr className="text-xs uppercase tracking-wider text-gray-400 border-b border-gray-700">
+                      <th className="pb-3 pr-4">File</th>
+                      <th className="pb-3 pr-4">Date</th>
+                      <th className="pb-3 pr-4">Rows</th>
+                      <th className="pb-3 pr-4">Status</th>
+                      <th className="pb-3">Uploaded By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((row) => (
+                      <tr key={row.id} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                        <td className="py-3 pr-4 text-gray-200 truncate max-w-[160px]" title={row.file_name}>{row.file_name}</td>
+                        <td className="py-3 pr-4 text-gray-400 whitespace-nowrap">{new Date(row.upload_date).toLocaleDateString()}</td>
+                        <td className="py-3 pr-4 text-gray-400">{row.row_count}</td>
+                        <td className={`py-3 pr-4 font-medium capitalize ${statusColor(row.status)}`}>{row.status}</td>
+                        <td className="py-3 text-gray-400">{row.profiles?.name || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end">
+              <button onClick={closeHistoryModal} className="bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
