@@ -147,6 +147,17 @@ export async function updateUserRole(req, res) {
 
 export async function getAllUsers(req, res) {
   try {
+    const { data: profiles, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('*');
+
+    if (profileError) {
+      console.error('Profiles lookup error:', profileError);
+      return res.status(500).json({ message: 'Failed to fetch profiles' });
+    }
+
+    const profileIds = profiles.map((p) => p.id).filter((id) => typeof id === 'string');
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
       page: 1,
       perPage: 1000
@@ -157,28 +168,23 @@ export async function getAllUsers(req, res) {
       return res.status(500).json({ message: 'Failed to list users' });
     }
 
-    const { data: profiles, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('*');
+    const authById = (authData.users || [])
+      .filter((u) => profileIds.includes(u.id))
+      .reduce((acc, u) => {
+        acc[u.id] = u;
+        return acc;
+      }, {});
 
-    if (profileError) {
-      console.error('Profiles lookup error:', profileError);
-      return res.status(500).json({ message: 'Failed to fetch profiles' });
-    }
+    const users = profiles.map((profile) => {
+      const authUser = authById[profile.id] || {};
+      const safeRole = typeof profile.role === 'string' ? profile.role.trim().toUpperCase() : 'UNKNOWN';
 
-    const profileById = profiles.reduce((acc, profile) => {
-      acc[profile.id] = profile;
-      return acc;
-    }, {});
-
-    const users = (authData.users || []).map((u) => {
-      const profile = profileById[u.id] || {};
       return {
-        id: u.id,
-        email: u.email,
-        name: profile.name || '',
-        role: profile.role || 'UNKNOWN',
-        active: profile.active === undefined ? true : profile.active,
+        id: profile.id,
+        email: typeof authUser.email === 'string' ? authUser.email.trim() : '',
+        name: typeof profile.name === 'string' ? profile.name.trim() : '—',
+        role: ['ADMIN', 'OWNER', 'ANALYST', 'STAFF'].includes(safeRole) ? safeRole : 'UNKNOWN',
+        active: profile.active === undefined ? true : Boolean(profile.active),
         last_logged_in: profile.last_logged_in || null
       };
     });
