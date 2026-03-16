@@ -154,6 +154,75 @@ export async function uploadCSV(req, res) {
   }
 };
 
+export async function getSalesRecords(req, res) {
+  try {
+    const {
+      sortBy = 'time',
+      order = 'desc',
+      startDate = '',
+      endDate = '',
+      product = [],
+      category = [],
+      transaction = []
+    } = req.query;
+
+    const sortMap = {
+      name: 'product_name',
+      time: 'sale_date',
+      price: 'total_price',
+      sales: 'total_price'
+    };
+
+    const sortColumn = sortMap[sortBy] || 'sale_date';
+    const asc = order.toLowerCase() === 'asc';
+
+    const toArray = (value) => {
+      if (Array.isArray(value)) return value.filter((v) => typeof v === 'string' && v.trim() !== '').map((v) => v.trim());
+      if (typeof value === 'string' && value.trim() !== '') return [value.trim()];
+      return [];
+    };
+
+    const productFilters = toArray(product).map((v) => v.toLowerCase());
+    const categoryFilters = toArray(category).map((v) => v.toLowerCase());
+    const transactionFilters = toArray(transaction).map((v) => v.toLowerCase());
+
+    console.log('SalesRecords query:', { startDate, endDate, productFilters, categoryFilters, transactionFilters, sortBy, order });
+    let query = supabaseAdmin.from('daily_sales').select('*');
+    if (startDate) query = query.gte('sale_date', startDate);
+    if (endDate) query = query.lte('sale_date', endDate);
+
+    const { data: records, error } = await query;
+    if (error) return res.status(400).json({ message: error.message });
+
+    let filteredRecords = (records || []).filter((row) => {
+      const productMatch = productFilters.length === 0 || productFilters.some((filter) => String(row.product_name || '').toLowerCase().includes(filter));
+      const categoryMatch = categoryFilters.length === 0 || categoryFilters.some((filter) => String(row.category || '').toLowerCase().includes(filter));
+      const transactionMatch = transactionFilters.length === 0 || transactionFilters.some((filter) => String(row.transaction_id || '').toLowerCase().includes(filter));
+      return productMatch && categoryMatch && transactionMatch;
+    });
+    console.log('SalesRecords sizes', { total: records?.length || 0, filtered: filteredRecords.length });
+
+    filteredRecords = filteredRecords.sort((a, b) => {
+      const av = a[sortColumn];
+      const bv = b[sortColumn];
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (sortColumn === 'sale_date') {
+        return asc ? new Date(av) - new Date(bv) : new Date(bv) - new Date(av);
+      }
+      if (typeof av === 'number' && typeof bv === 'number') {
+        return asc ? av - bv : bv - av;
+      }
+      return asc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+
+    res.json({ records: filteredRecords });
+  } catch (err) {
+    console.error('Sales records error:', err);
+    res.status(500).json({ message: 'Could not fetch sales records' });
+  }
+}
+
 export async function getCSV(req, res){
   try {
     const { data, error } = await supabaseAdmin

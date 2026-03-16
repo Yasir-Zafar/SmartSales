@@ -2,6 +2,7 @@ import React, { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './App.css';
+import { SalesRecords } from './pages/SalesRecords';
 
 const API_URL = 'http://localhost:5000/api';
 
@@ -67,7 +68,8 @@ const Navbar = () => {
       <h3>SmartSales</h3>
       <div className="nav-links">
         <Link to="/">Dashboard</Link>
-        {user?.role === 'Admin' && <Link to="/admin">Admin Panel</Link>}
+        {user?.role === 'ADMIN' && <Link to="/admin">Admin Panel</Link>}
+        {user?.role === 'ANALYST' && <Link to="/sales-records">View Sales Records</Link>}
         <button onClick={logout} style={{ marginLeft: '1rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>Logout</button>
       </div>
     </nav>
@@ -216,8 +218,13 @@ function App() {
               <Dashboard />
             </ProtectedRoute>
           } />
+          <Route path="/sales-records" element={
+            <ProtectedRoute roles={['ANALYST', 'ADMIN']}>
+              <SalesRecords />
+            </ProtectedRoute>
+          } />
           <Route path="/admin" element={
-            <ProtectedRoute roles={['Admin']}>
+            <ProtectedRoute roles={['ADMIN']}>
               <AdminPanel />
             </ProtectedRoute>
           } />
