@@ -19,7 +19,11 @@ export const Navbar = () => {
           <Link to="/owner" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
         )}
         {user?.role === 'ANALYST' && (
-          <Link to="/analyst" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
+          <>
+            <Link to="/analyst" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
+            <Link to="/sales-records" className="text-gray-400 hover:text-gray-200 transition-colors">View Sales Records</Link>
+            <Link to="/compare-periods" className="text-gray-400 hover:text-gray-200 transition-colors">Compare Time Periods</Link>
+          </>
         )}
         {user?.role === 'STAFF' && (
           <Link to="/staff" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
