@@ -1,0 +1,227 @@
+[
+  {
+    "segment_id": 0,
+    "size": 3380,
+    "avg_recency_days": 0.0,
+    "avg_frequency": 5.7,
+    "avg_spend": 26.43,
+    "avg_unique_products": 5.7,
+    "top_products": [
+      {
+        "product": "banana",
+        "order_count": 205
+      },
+      {
+        "product": "bag of organic bananas",
+        "order_count": 118
+      },
+      {
+        "product": "organic whole milk",
+        "order_count": 92
+      },
+      {
+        "product": "organic strawberries",
+        "order_count": 77
+      },
+      {
+        "product": "sparkling water grapefruit",
+        "order_count": 77
+      }
+    ],
+    "top_categories": [
+      {
+        "category": "dairy eggs",
+        "order_count": 3687
+      },
+      {
+        "category": "beverages",
+        "order_count": 3162
+      },
+      {
+        "category": "snacks",
+        "order_count": 2732
+      }
+    ],
+    "label": "Champions"
+  },
+  {
+    "segment_id": 1,
+    "size": 425,
+    "avg_recency_days": 0.0,
+    "avg_frequency": 4.9,
+    "avg_spend": 32.85,
+    "avg_unique_products": 4.9,
+    "top_products": [
+      {
+        "product": "select-a-size white paper towels",
+        "order_count": 14
+      },
+      {
+        "product": "banana",
+        "order_count": 14
+      },
+      {
+        "product": "cotton swabs",
+        "order_count": 11
+      },
+      {
+        "product": "bag of organic bananas",
+        "order_count": 10
+      },
+      {
+        "product": "aluminum foil",
+        "order_count": 10
+      }
+    ],
+    "top_categories": [
+      {
+        "category": "household",
+        "order_count": 654
+      },
+      {
+        "category": "personal care",
+        "order_count": 445
+      },
+      {
+        "category": "beverages",
+        "order_count": 207
+      }
+    ],
+    "label": "Loyal Customers"
+  },
+  {
+    "segment_id": 2,
+    "size": 103,
+    "avg_recency_days": 0.0,
+    "avg_frequency": 3.9,
+    "avg_spend": 50.98,
+    "avg_unique_products": 3.9,
+    "top_products": [
+      {
+        "product": "beer",
+        "order_count": 11
+      },
+      {
+        "product": "sauvignon blanc",
+        "order_count": 10
+      },
+      {
+        "product": "cabernet sauvignon",
+        "order_count": 10
+      },
+      {
+        "product": "india pale ale",
+        "order_count": 7
+      },
+      {
+        "product": "malbec",
+        "order_count": 6
+      }
+    ],
+    "top_categories": [
+      {
+        "category": "alcohol",
+        "order_count": 264
+      },
+      {
+        "category": "beverages",
+        "order_count": 31
+      },
+      {
+        "category": "dairy eggs",
+        "order_count": 19
+      }
+    ],
+    "label": "Loyal Customers"
+  },
+  {
+    "segment_id": 3,
+    "size": 2819,
+    "avg_recency_days": 0.0,
+    "avg_frequency": 19.0,
+    "avg_spend": 88.06,
+    "avg_unique_products": 19.0,
+    "top_products": [
+      {
+        "product": "banana",
+        "order_count": 707
+      },
+      {
+        "product": "organic strawberries",
+        "order_count": 403
+      },
+      {
+        "product": "bag of organic bananas",
+        "order_count": 369
+      },
+      {
+        "product": "organic avocado",
+        "order_count": 350
+      },
+      {
+        "product": "organic baby spinach",
+        "order_count": 312
+      }
+    ],
+    "top_categories": [
+      {
+        "category": "produce",
+        "order_count": 13602
+      },
+      {
+        "category": "dairy eggs",
+        "order_count": 8818
+      },
+      {
+        "category": "snacks",
+        "order_count": 4697
+      }
+    ],
+    "label": "Champions"
+  },
+  {
+    "segment_id": 4,
+    "size": 3277,
+    "avg_recency_days": 0.0,
+    "avg_frequency": 7.5,
+    "avg_spend": 28.81,
+    "avg_unique_products": 7.5,
+    "top_products": [
+      {
+        "product": "banana",
+        "order_count": 561
+      },
+      {
+        "product": "bag of organic bananas",
+        "order_count": 418
+      },
+      {
+        "product": "organic baby spinach",
+        "order_count": 353
+      },
+      {
+        "product": "organic strawberries",
+        "order_count": 348
+      },
+      {
+        "product": "organic avocado",
+        "order_count": 299
+      }
+    ],
+    "top_categories": [
+      {
+        "category": "produce",
+        "order_count": 12564
+      },
+      {
+        "category": "dairy eggs",
+        "order_count": 3403
+      },
+      {
+        "category": "beverages",
+        "order_count": 1142
+      }
+    ],
+    "label": "Champions"
+  }
+]
