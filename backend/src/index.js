@@ -7,6 +7,8 @@ import adminEndpointRoutes from "./routes/adminEndpointRoutes.js";
 import adminUserManagementRoutes from "./routes/adminUserManagementRoutes.js";
 import currentUserRoutes from "./routes/currentUserRoutes.js";
 import csvRoutes from "./routes/csvRoutes.js";
+import insightsRoutes from "./routes/insightsRoutes.js";
+import analystRoutes from "./routes/analystRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -33,6 +35,12 @@ app.get('/', (req, res) => {
 
 //upload daily sales and see history
 app.use('/api/csv', csvRoutes);
+
+// ML insights (owner/analyst/staff views)
+app.use('/api/insights', insightsRoutes);
+
+// Analyst: training CSV export + ML reload
+app.use('/api/analyst', analystRoutes);
 
 //--------------------------------------------------------------------------------------------------
 // Error handling middleware
