@@ -12,6 +12,7 @@ import { AdminEditUser } from './pages/AdminEditUser';
 import { AdminViewUsers } from './pages/AdminViewUsers';
 import { SalesRecords } from './pages/SalesRecords';
 import { CompareTimePeriods } from './pages/CompareTimePeriods';
+import { OwnerSalesSummary } from './pages/OwnerSalesSummary';
 
 // --- MAIN APP ---
 function App() {
@@ -58,6 +59,11 @@ function App() {
           <Route path="/sales-records" element={
             <ProtectedRoute roles={['ANALYST']}>
               <SalesRecords />
+            </ProtectedRoute>
+          } />
+          <Route path="/owner/sales-summary" element={
+            <ProtectedRoute roles={['OWNER']}>
+              <OwnerSalesSummary />
             </ProtectedRoute>
           } />
           <Route path="/compare-periods" element={

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
@@ -95,10 +96,10 @@ const StatCard = ({ label, value, change, valueColor }) => (
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const STATS = [
-  { label: 'Total Revenue',    value: '$124,500', change: '+12.5% from last month', valueColor: 'text-teal-500'   },
-  { label: 'Total Sales',      value: '1,842',    change: '+8.2% from last month',  valueColor: 'text-pink-500'   },
-  { label: 'Active Customers', value: '1,240',    change: '+5.1% from last month',  valueColor: 'text-purple-500' },
-  { label: 'Profit Margin',    value: '34.2%',    change: '+2.1% from last month',  valueColor: 'text-green-500'  },
+  { label: 'Total Revenue', value: '$124,500', change: '+12.5% from last month', valueColor: 'text-teal-500' },
+  { label: 'Total Sales', value: '1,842', change: '+8.2% from last month', valueColor: 'text-pink-500' },
+  { label: 'Active Customers', value: '1,240', change: '+5.1% from last month', valueColor: 'text-purple-500' },
+  { label: 'Profit Margin', value: '34.2%', change: '+2.1% from last month', valueColor: 'text-green-500' },
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -158,9 +159,9 @@ export const OwnerDashboard = () => {
       return [];
     };
     return [
-      { key: 'ensemble', label: 'Ensemble', values: parseArr(selected.ensemble_daily) },
-      { key: 'lstm',     label: 'LSTM',     values: parseArr(selected.lstm_daily)     },
-      { key: 'seasonal', label: 'Seasonal', values: parseArr(selected.seasonal_daily) },
+      { key: 'ensemble', values: parseArr(selected.ensemble_daily) },
+      { key: 'lstm', values: parseArr(selected.lstm_daily) },
+      { key: 'seasonal', values: parseArr(selected.seasonal_daily) },
     ];
   }, [selected]);
 
@@ -180,7 +181,7 @@ export const OwnerDashboard = () => {
           </div>
           <button
             onClick={exportToPdf}
-            className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium rounded-lg transition-colors"
+            className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white text-sm font-medium rounded-lg"
           >
             Export PDF
           </button>
@@ -191,6 +192,25 @@ export const OwnerDashboard = () => {
           {STATS.map((stat) => (
             <StatCard key={stat.label} {...stat} />
           ))}
+        </div>
+
+        {/* Sales Summary + Forecast Card */}
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-teal-700/5 border border-teal-500/30 p-6 rounded-xl shadow-xl">
+            <h3 className="text-lg font-semibold text-teal-200 mb-4">Sales Summary</h3>
+            <p className="text-gray-300 mb-4">View owner-only sales by category and optional date range.</p>
+            <Link
+              to="/owner/sales-summary"
+              className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+            >
+              Open Sales Summary
+            </Link>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-50 mb-4">Sales Forecast</h3>
+            <p className="text-gray-400">AI-powered sales predictions and trends</p>
+          </div>
         </div>
 
         {/* Alerts */}
@@ -207,37 +227,14 @@ export const OwnerDashboard = () => {
 
         {/* Forecast Chart */}
         <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-50">Sales Forecast</h3>
-            {products.length > 0 && (
-              <select
-                value={selectedProduct}
-                onChange={(e) => setSelectedProduct(e.target.value)}
-                className="bg-gray-700 text-gray-200 text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:outline-none"
-              >
-                {products.map((p) => (
-                  <option key={p.product_name} value={p.product_name}>{p.product_name}</option>
-                ))}
-              </select>
-            )}
-          </div>
+          <h3 className="text-lg font-semibold text-gray-50 mb-4">Sales Forecast</h3>
+
           {loading && <p className="text-gray-400 text-sm">Loading forecasts…</p>}
-          {error  && <p className="text-red-400 text-sm">{error}</p>}
+          {error && <p className="text-red-400 text-sm">{error}</p>}
           {!loading && !error && (
-            <LineChart
-              series={chartSeries}
-              legend="Ensemble · LSTM · Seasonal (daily)"
-            />
+            <LineChart series={chartSeries} legend="Ensemble · LSTM · Seasonal" />
           )}
         </div>
-
-        {/* Customer Segmentation */}
-        <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
-          <h3 className="text-lg font-semibold text-gray-50 mb-4">Customer Segmentation</h3>
-          <p className="text-gray-400">Customer groups and behavior analysis</p>
-        </div>
-
-        {/* Add future sections below — auto-included in PDF */}
 
       </div>
     </div>

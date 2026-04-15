@@ -16,7 +16,10 @@ export const Navbar = () => {
       <h3 className="text-xl font-semibold text-gray-50">SmartSales</h3>
       <div className="flex items-center gap-6">
         {user?.role === 'OWNER' && (
-          <Link to="/owner" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
+          <>
+            <Link to="/owner" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
+            <Link to="/owner/sales-summary" className="text-gray-400 hover:text-gray-200 transition-colors">Sales Summary</Link>
+          </>
         )}
         {user?.role === 'ANALYST' && (
           <>
