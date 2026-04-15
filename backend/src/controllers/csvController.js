@@ -223,6 +223,24 @@ export async function getSalesRecords(req, res) {
   }
 }
 
+export async function getSaleCategories(req, res) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('daily_sales')
+      .select('category')
+      .not('category', 'is', null)
+      .neq('category', '');
+
+    if (error) return res.status(400).json({ message: error.message });
+
+    const categories = Array.from(new Set((data || []).map((row) => row.category))).sort();
+    res.json({ categories });
+  } catch (err) {
+    console.error('Sales categories error:', err);
+    res.status(500).json({ message: 'Could not fetch categories' });
+  }
+}
+
 export async function getCSV(req, res){
   try {
     const { data, error } = await supabaseAdmin

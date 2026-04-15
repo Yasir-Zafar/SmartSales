@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
@@ -33,6 +34,16 @@ export const OwnerDashboard = () => {
           </div>
         </div>
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-teal-700/5 border border-teal-500/30 p-6 rounded-xl shadow-xl">
+            <h3 className="text-lg font-semibold text-teal-200 mb-4">Sales Summary</h3>
+            <p className="text-gray-300 mb-4">View owner-only sales by category and optional date range.</p>
+            <Link
+              to="/owner/sales-summary"
+              className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2 transition"
+            >
+              Open Sales Summary
+            </Link>
+          </div>
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
             <h3 className="text-lg font-semibold text-gray-50 mb-4">Sales Forecast</h3>
             <p className="text-gray-400">AI-powered sales predictions and trends</p>
