@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
 const API_URL = 'http://localhost:5000/api';
 
+// ─── Line Chart ───────────────────────────────────────────────────────────────
 function LineChart({ series, legend, height = 220 }) {
   const w = 600;
   const pad = 24;
@@ -50,56 +51,7 @@ function LineChart({ series, legend, height = 220 }) {
   );
 }
 
-//const API_URL = 'http://localhost:5000/api';
-
-function LineChart({ series, legend, height = 220 }) {
-  const w = 600;
-  const pad = 24;
-  if (!series?.length) return <p className="text-gray-500 text-sm">No series data.</p>;
-
-  const all = series.flatMap((s) => s.values || []);
-  const minV = Math.min(...all, 0);
-  const maxV = Math.max(...all, 1);
-  const span = maxV - minV || 1;
-  const innerW = w - pad * 2;
-  const innerH = height - pad * 2;
-
-  const pointsFor = (values) =>
-    (values || []).map((v, i) => {
-      const x = pad + (i / Math.max(values.length - 1, 1)) * innerW;
-      const y = pad + innerH - ((Number(v) - minV) / span) * innerH;
-      return `${x},${y}`;
-    });
-
-  const colors = ['#2dd4bf', '#f472b6', '#a78bfa'];
-
-  return (
-    <div>
-      <p className="text-xs text-gray-500 mb-2">{legend}</p>
-      <svg viewBox={`0 0 ${w} ${height}`} className="w-full max-w-3xl h-auto">
-        {[0, 0.25, 0.5, 0.75, 1].map((t) => {
-          const y = pad + innerH - t * innerH;
-          return (
-            <line key={t} x1={pad} y1={y} x2={w - pad} y2={y} stroke="#374151" strokeWidth="1" />
-          );
-        })}
-        {series.map((s, idx) => (
-          <polyline
-            key={s.key}
-            fill="none"
-            stroke={colors[idx % colors.length]}
-            strokeWidth="2"
-            points={pointsFor(s.values).join(' ')}
-          />
-        ))}
-      </svg>
-    </div>
-  );
-}
-
-// ─── PDF Export Hook ────────────────────────────────────────────────────────
-// Drop new cards/sections anywhere inside <div ref={exportRef}> and they'll
-// automatically appear in the exported PDF — no changes needed here.
+// ─── PDF Export Hook ──────────────────────────────────────────────────────────
 const usePdfExport = (filename = 'dashboard.pdf') => {
   const exportRef = useRef(null);
 
@@ -107,7 +59,6 @@ const usePdfExport = (filename = 'dashboard.pdf') => {
     const element = exportRef.current;
     if (!element) return;
 
-    // Dynamically import to keep bundle lean
     const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
       import('html2canvas'),
       import('jspdf'),
@@ -116,7 +67,7 @@ const usePdfExport = (filename = 'dashboard.pdf') => {
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
-      backgroundColor: '#111827', // matches bg-gray-900
+      backgroundColor: '#111827',
     });
 
     const imgData = canvas.toDataURL('image/png');
@@ -133,8 +84,7 @@ const usePdfExport = (filename = 'dashboard.pdf') => {
   return { exportRef, exportToPdf };
 };
 
-// ─── Stat Card ───────────────────────────────────────────────────────────────
-// Add new metric cards by just adding an entry to the STATS array below.
+// ─── Stat Card ────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, change, valueColor }) => (
   <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
     <h4 className="text-sm font-medium text-gray-400 uppercase">{label}</h4>
@@ -143,7 +93,7 @@ const StatCard = ({ label, value, change, valueColor }) => (
   </div>
 );
 
-// ─── Config — edit this to add/remove stat cards ─────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 const STATS = [
   { label: 'Total Revenue',    value: '$124,500', change: '+12.5% from last month', valueColor: 'text-teal-500'   },
   { label: 'Total Sales',      value: '1,842',    change: '+8.2% from last month',  valueColor: 'text-pink-500'   },
@@ -151,7 +101,7 @@ const STATS = [
   { label: 'Profit Margin',    value: '34.2%',    change: '+2.1% from last month',  valueColor: 'text-green-500'  },
 ];
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 export const OwnerDashboard = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -200,24 +150,17 @@ export const OwnerDashboard = () => {
 
   const chartSeries = useMemo(() => {
     if (!selected) return [];
-    const ens = selected.ensemble_daily;
-    const lstm = selected.lstm_daily;
-    const sea = selected.seasonal_daily;
     const parseArr = (v) => {
       if (Array.isArray(v)) return v;
       if (typeof v === 'string') {
-        try {
-          return JSON.parse(v);
-        } catch {
-          return [];
-        }
+        try { return JSON.parse(v); } catch { return []; }
       }
       return [];
     };
     return [
-      { key: 'ensemble', label: 'Ensemble', values: parseArr(ens) },
-      { key: 'lstm', label: 'LSTM', values: parseArr(lstm) },
-      { key: 'seasonal', label: 'Seasonal', values: parseArr(sea) },
+      { key: 'ensemble', label: 'Ensemble', values: parseArr(selected.ensemble_daily) },
+      { key: 'lstm',     label: 'LSTM',     values: parseArr(selected.lstm_daily)     },
+      { key: 'seasonal', label: 'Seasonal', values: parseArr(selected.seasonal_daily) },
     ];
   }, [selected]);
 
@@ -227,7 +170,6 @@ export const OwnerDashboard = () => {
     <div className="min-h-screen flex flex-col bg-gray-900">
       <Navbar />
 
-      {/* ↓ Everything inside this div is captured in the PDF export */}
       <div ref={exportRef} className="p-8">
 
         {/* Header */}
@@ -244,26 +186,58 @@ export const OwnerDashboard = () => {
           </button>
         </div>
 
-        {/* Stat Cards — driven by STATS array above */}
+        {/* Stat Cards */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {STATS.map((stat) => (
             <StatCard key={stat.label} {...stat} />
           ))}
         </div>
 
-        {/* Content Sections — add more <div> blocks here freely */}
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Sales Forecast</h3>
-            <p className="text-gray-400">AI-powered sales predictions and trends</p>
+        {/* Alerts */}
+        {alerts.length > 0 && (
+          <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-50 mb-4">Abnormal Drop Alerts</h3>
+            <ul className="space-y-2">
+              {alerts.map((a, i) => (
+                <li key={i} className="text-sm text-red-400">{JSON.stringify(a)}</li>
+              ))}
+            </ul>
           </div>
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Customer Segmentation</h3>
-            <p className="text-gray-400">Customer groups and behavior analysis</p>
+        )}
+
+        {/* Forecast Chart */}
+        <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-50">Sales Forecast</h3>
+            {products.length > 0 && (
+              <select
+                value={selectedProduct}
+                onChange={(e) => setSelectedProduct(e.target.value)}
+                className="bg-gray-700 text-gray-200 text-sm rounded-lg px-3 py-1.5 border border-gray-600 focus:outline-none"
+              >
+                {products.map((p) => (
+                  <option key={p.product_name} value={p.product_name}>{p.product_name}</option>
+                ))}
+              </select>
+            )}
           </div>
+          {loading && <p className="text-gray-400 text-sm">Loading forecasts…</p>}
+          {error  && <p className="text-red-400 text-sm">{error}</p>}
+          {!loading && !error && (
+            <LineChart
+              series={chartSeries}
+              legend="Ensemble · LSTM · Seasonal (daily)"
+            />
+          )}
         </div>
 
-        {/* Add future sections below — they'll export automatically */}
+        {/* Customer Segmentation */}
+        <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
+          <h3 className="text-lg font-semibold text-gray-50 mb-4">Customer Segmentation</h3>
+          <p className="text-gray-400">Customer groups and behavior analysis</p>
+        </div>
+
+        {/* Add future sections below — auto-included in PDF */}
 
       </div>
     </div>
