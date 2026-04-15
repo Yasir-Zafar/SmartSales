@@ -16,7 +16,7 @@ const REQUIRED_COLUMNS = [
 const OPTIONAL_COLUMNS = ['customer_id'];
 const FORBIDDEN_COLUMNS = ['id', 'created_at', 'uploaded_by'];
 
-const BATCH_SIZE = 800;   // Good balance for Supabase
+const BATCH_SIZE = 800;
 
 function chunkArray(array, size) {
   const chunks = [];
@@ -35,7 +35,7 @@ function stableCustomerId(transactionId) {
 
 function validateRow(row, rowIndex) {
   const errors = [];
-  
+
   if (!row.sale_date || isNaN(Date.parse(row.sale_date)))
     errors.push(`Row ${rowIndex}: invalid sale_date "${row.sale_date}"`);
 
@@ -118,6 +118,7 @@ export async function uploadCSV(req, res) {
               row.customer_id != null && String(row.customer_id).trim() !== ''
                 ? parseInt(row.customer_id, 10)
                 : stableCustomerId(transactionId);
+
             rows.push({
               sale_date: row.sale_date,
               transaction_id: transactionId,
@@ -145,16 +146,15 @@ export async function uploadCSV(req, res) {
         status: 'failed',
         error_message: validationErrors.slice(0, 500).join(' | ')
       }]);
-      return res.status(400).json({ 
-        message: 'Validation failed', 
-        errors: validationErrors.slice(0, 20) 
+
+      return res.status(400).json({
+        message: 'Validation failed',
+        errors: validationErrors.slice(0, 20)
       });
     }
 
     if (rows.length === 0)
       return res.status(400).json({ message: 'CSV file is empty after validation' });
-
-    console.log(`Starting batch insert of ${rows.length} rows...`);
 
     const batches = chunkArray(rows, BATCH_SIZE);
     let insertedCount = 0;
@@ -163,25 +163,20 @@ export async function uploadCSV(req, res) {
       const batch = batches[i];
       let { error } = await supabaseAdmin.from('daily_sales').insert(batch);
 
-      // If DB hasn't been migrated yet (customer_id missing), retry without it.
       if (error && /customer_id/i.test(error.message || '')) {
         const fallback = batch.map(({ customer_id, ...rest }) => rest);
         const retry = await supabaseAdmin.from('daily_sales').insert(fallback);
         error = retry.error;
       }
 
-      if (error) {
-        console.error(`Batch ${i+1} failed:`, error);
-        throw new Error(`Insert failed at batch ${i+1}: ${error.message}`);
-      }
+      if (error) throw new Error(`Insert failed at batch ${i + 1}: ${error.message}`);
 
       insertedCount += batch.length;
-      console.log(`✅ Batch ${i+1}/${batches.length} inserted (${insertedCount}/${rows.length} rows)`);
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
-    const { error: historyError } = await supabaseAdmin.from('csv_uploads').insert([{
+    await supabaseAdmin.from('csv_uploads').insert([{
       uploaded_by: req.user.id,
       file_name: req.file.originalname,
       upload_date: new Date().toISOString().split('T')[0],
@@ -189,22 +184,15 @@ export async function uploadCSV(req, res) {
       status: 'processed',
       duration_seconds: parseFloat(duration)
     }]);
-    if (historyError) {
-      console.error('csv_uploads insert error:', historyError);
-    }
 
-    console.log(`🎉 Successfully uploaded ${rows.length} rows in ${duration} seconds`);
-
-    res.status(201).json({ 
+    res.status(201).json({
       message: `Successfully uploaded ${rows.length} rows`,
       duration: `${duration} seconds`,
       batches: batches.length
     });
 
   } catch (err) {
-    console.error('CSV upload error:', err);
-
-    const { error: failLogError } = await supabaseAdmin.from('csv_uploads').insert([{
+    await supabaseAdmin.from('csv_uploads').insert([{
       uploaded_by: req.user.id,
       file_name: req.file.originalname,
       upload_date: new Date().toISOString().split('T')[0],
@@ -212,15 +200,10 @@ export async function uploadCSV(req, res) {
       status: 'failed',
       error_message: err.message
     }]);
-    if (failLogError) {
-      console.error('csv_uploads failure-log insert error:', failLogError);
-    }
 
     res.status(400).json({ message: err.message });
   }
 }
-
-// ==================== ORIGINAL FUNCTIONS (Unchanged) ====================
 
 export async function getSalesRecords(req, res) {
   try {
@@ -245,14 +228,14 @@ export async function getSalesRecords(req, res) {
     const asc = order.toLowerCase() === 'asc';
 
     const toArray = (value) => {
-      if (Array.isArray(value)) return value.filter((v) => typeof v === 'string' && v.trim() !== '').map((v) => v.trim());
-      if (typeof value === 'string' && value.trim() !== '') return [value.trim()];
+      if (Array.isArray(value)) return value.filter(v => v.trim()).map(v => v.trim());
+      if (typeof value === 'string' && value.trim()) return [value.trim()];
       return [];
     };
 
-    const productFilters = toArray(product).map((v) => v.toLowerCase());
-    const categoryFilters = toArray(category).map((v) => v.toLowerCase());
-    const transactionFilters = toArray(transaction).map((v) => v.toLowerCase());
+    const productFilters = toArray(product).map(v => v.toLowerCase());
+    const categoryFilters = toArray(category).map(v => v.toLowerCase());
+    const transactionFilters = toArray(transaction).map(v => v.toLowerCase());
 
     let query = supabaseAdmin.from('daily_sales').select('*');
 
@@ -260,40 +243,45 @@ export async function getSalesRecords(req, res) {
     if (endDate) query = query.lte('sale_date', endDate);
 
     const { data: records, error } = await query;
-
     if (error) return res.status(400).json({ message: error.message });
 
-    let filteredRecords = (records || []).filter((row) => {
-      const productMatch = productFilters.length === 0 || productFilters.some((filter) =>
-        String(row.product_name || '').toLowerCase().includes(filter)
-      );
-      const categoryMatch = categoryFilters.length === 0 || categoryFilters.some((filter) =>
-        String(row.category || '').toLowerCase().includes(filter)
-      );
-      const transactionMatch = transactionFilters.length === 0 || transactionFilters.some((filter) =>
-        String(row.transaction_id || '').toLowerCase().includes(filter)
-      );
+    let filteredRecords = (records || []).filter(row => {
+      const productMatch = !productFilters.length || productFilters.some(f => row.product_name?.toLowerCase().includes(f));
+      const categoryMatch = !categoryFilters.length || categoryFilters.some(f => row.category?.toLowerCase().includes(f));
+      const transactionMatch = !transactionFilters.length || transactionFilters.some(f => row.transaction_id?.toLowerCase().includes(f));
       return productMatch && categoryMatch && transactionMatch;
     });
 
-    filteredRecords = filteredRecords.sort((a, b) => {
+    filteredRecords.sort((a, b) => {
       const av = a[sortColumn];
       const bv = b[sortColumn];
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      if (sortColumn === 'sale_date') {
-        return asc ? new Date(av) - new Date(bv) : new Date(bv) - new Date(av);
-      }
-      if (typeof av === 'number' && typeof bv === 'number') {
-        return asc ? av - bv : bv - av;
-      }
-      return asc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+      if (sortColumn === 'sale_date') return asc ? new Date(av) - new Date(bv) : new Date(bv) - new Date(av);
+      if (typeof av === 'number') return asc ? av - bv : bv - av;
+      return asc ? String(av).localeCompare(bv) : String(bv).localeCompare(av);
     });
 
     res.json({ records: filteredRecords });
-  } catch (err) {
-    console.error('Sales records error:', err);
+
+  } catch {
     res.status(500).json({ message: 'Could not fetch sales records' });
+  }
+}
+
+export async function getSaleCategories(req, res) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('daily_sales')
+      .select('category')
+      .not('category', 'is', null)
+      .neq('category', '');
+
+    if (error) return res.status(400).json({ message: error.message });
+
+    const categories = Array.from(new Set((data || []).map(row => row.category))).sort();
+    res.json({ categories });
+
+  } catch {
+    res.status(500).json({ message: 'Could not fetch categories' });
   }
 }
 
@@ -301,16 +289,14 @@ export async function getCSV(req, res) {
   try {
     const { data, error } = await supabaseAdmin
       .from('csv_uploads')
-      .select(`
-        *,
-        profiles (name, role)
-      `)
+      .select(`*, profiles (name, role)`)
       .order('created_at', { ascending: false });
 
     if (error) return res.status(400).json({ message: error.message });
+
     res.json({ uploads: data });
-  } catch (err) {
-    console.error('Upload history error:', err);
+
+  } catch {
     res.status(500).json({ message: 'Server error' });
   }
 }
