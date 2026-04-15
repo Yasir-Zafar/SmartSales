@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
@@ -17,6 +17,31 @@ export const StaffDashboard = () => {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
+
+  const [invRisks, setInvRisks] = useState([]);
+  const [invLoading, setInvLoading] = useState(true);
+  const [invErr, setInvErr] = useState('');
+
+  useEffect(() => {
+    const loadInv = async () => {
+      setInvLoading(true);
+      setInvErr('');
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('http://localhost:5000/api/insights/staff/inventory/risk', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to load recommendations');
+        setInvRisks(data.risks || []);
+      } catch (e) {
+        setInvErr(e.message || 'Could not load inventory guidance');
+      } finally {
+        setInvLoading(false);
+      }
+    };
+    loadInv();
+  }, []);
 
   // --- Upload Modal ---
   const openUploadModal = () => {
@@ -142,6 +167,27 @@ export const StaffDashboard = () => {
         </div>
 
         {/* Stats */}
+        <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
+          <h3 className="text-lg font-semibold text-gray-50 mb-2">Restock guidance</h3>
+          <p className="text-xs text-gray-500 mb-4">Plain-language actions based on forecasted demand (ML service).</p>
+          {invLoading ? (
+            <p className="text-gray-400 text-sm">Loading…</p>
+          ) : invErr ? (
+            <p className="text-amber-400 text-sm">{invErr}</p>
+          ) : invRisks.length === 0 ? (
+            <p className="text-gray-500 text-sm">No high-priority restock items right now.</p>
+          ) : (
+            <ul className="space-y-3">
+              {invRisks.slice(0, 8).map((r) => (
+                <li key={r.product} className="border border-gray-700 rounded-lg p-3">
+                  <p className="text-teal-400 font-medium text-sm capitalize">{r.product}</p>
+                  <p className="text-gray-300 text-sm mt-1">{r.staff_action?.message}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
             <h4 className="text-sm font-medium text-gray-400 uppercase">Today's Sales</h4>

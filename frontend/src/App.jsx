@@ -10,6 +10,8 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminCreateUser } from './pages/AdminCreateUser';
 import { AdminEditUser } from './pages/AdminEditUser';
 import { AdminViewUsers } from './pages/AdminViewUsers';
+import { SalesRecords } from './pages/SalesRecords';
+import { CompareTimePeriods } from './pages/CompareTimePeriods';
 
 // --- MAIN APP ---
 function App() {
@@ -51,6 +53,16 @@ function App() {
           <Route path="/admin/edit-user" element={
             <ProtectedRoute roles={['ADMIN']}>
               <AdminEditUser />
+            </ProtectedRoute>
+          } />
+          <Route path="/sales-records" element={
+            <ProtectedRoute roles={['ANALYST']}>
+              <SalesRecords />
+            </ProtectedRoute>
+          } />
+          <Route path="/compare-periods" element={
+            <ProtectedRoute roles={['ANALYST']}>
+              <CompareTimePeriods />
             </ProtectedRoute>
           } />
           <Route path="/" element={<Navigate to="/login" />} />

@@ -1,6 +1,101 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
+
+const API_URL = 'http://localhost:5000/api';
+
+function LineChart({ series, legend, height = 220 }) {
+  const w = 600;
+  const pad = 24;
+  if (!series?.length) return <p className="text-gray-500 text-sm">No series data.</p>;
+
+  const all = series.flatMap((s) => s.values || []);
+  const minV = Math.min(...all, 0);
+  const maxV = Math.max(...all, 1);
+  const span = maxV - minV || 1;
+  const innerW = w - pad * 2;
+  const innerH = height - pad * 2;
+
+  const pointsFor = (values) =>
+    (values || []).map((v, i) => {
+      const x = pad + (i / Math.max(values.length - 1, 1)) * innerW;
+      const y = pad + innerH - ((Number(v) - minV) / span) * innerH;
+      return `${x},${y}`;
+    });
+
+  const colors = ['#2dd4bf', '#f472b6', '#a78bfa'];
+
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-2">{legend}</p>
+      <svg viewBox={`0 0 ${w} ${height}`} className="w-full max-w-3xl h-auto">
+        {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+          const y = pad + innerH - t * innerH;
+          return (
+            <line key={t} x1={pad} y1={y} x2={w - pad} y2={y} stroke="#374151" strokeWidth="1" />
+          );
+        })}
+        {series.map((s, idx) => (
+          <polyline
+            key={s.key}
+            fill="none"
+            stroke={colors[idx % colors.length]}
+            strokeWidth="2"
+            points={pointsFor(s.values).join(' ')}
+          />
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+//const API_URL = 'http://localhost:5000/api';
+
+function LineChart({ series, legend, height = 220 }) {
+  const w = 600;
+  const pad = 24;
+  if (!series?.length) return <p className="text-gray-500 text-sm">No series data.</p>;
+
+  const all = series.flatMap((s) => s.values || []);
+  const minV = Math.min(...all, 0);
+  const maxV = Math.max(...all, 1);
+  const span = maxV - minV || 1;
+  const innerW = w - pad * 2;
+  const innerH = height - pad * 2;
+
+  const pointsFor = (values) =>
+    (values || []).map((v, i) => {
+      const x = pad + (i / Math.max(values.length - 1, 1)) * innerW;
+      const y = pad + innerH - ((Number(v) - minV) / span) * innerH;
+      return `${x},${y}`;
+    });
+
+  const colors = ['#2dd4bf', '#f472b6', '#a78bfa'];
+
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-2">{legend}</p>
+      <svg viewBox={`0 0 ${w} ${height}`} className="w-full max-w-3xl h-auto">
+        {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+          const y = pad + innerH - t * innerH;
+          return (
+            <line key={t} x1={pad} y1={y} x2={w - pad} y2={y} stroke="#374151" strokeWidth="1" />
+          );
+        })}
+        {series.map((s, idx) => (
+          <polyline
+            key={s.key}
+            fill="none"
+            stroke={colors[idx % colors.length]}
+            strokeWidth="2"
+            points={pointsFor(s.values).join(' ')}
+          />
+        ))}
+      </svg>
+    </div>
+  );
+}
 
 // ─── PDF Export Hook ────────────────────────────────────────────────────────
 // Drop new cards/sections anywhere inside <div ref={exportRef}> and they'll
@@ -59,6 +154,73 @@ const STATS = [
 // ─── Main Component ──────────────────────────────────────────────────────────
 export const OwnerDashboard = () => {
   const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [alerts, setAlerts] = useState([]);
+  const [forecastBatch, setForecastBatch] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState('');
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const [fcRes, alRes] = await Promise.all([
+          axios.get(`${API_URL}/insights/owner/forecasts/latest`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${API_URL}/insights/owner/alerts/abnormal-drops`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        setForecastBatch(fcRes.data);
+        setAlerts(alRes.data?.alerts || []);
+      } catch (e) {
+        setError(e.response?.data?.message || e.message || 'Could not load forecasts');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const products = forecastBatch?.products || [];
+
+  const selected = useMemo(
+    () => products.find((p) => p.product_name === selectedProduct),
+    [products, selectedProduct]
+  );
+
+  useEffect(() => {
+    if (!selectedProduct && products[0]?.product_name) {
+      setSelectedProduct(products[0].product_name);
+    }
+  }, [products, selectedProduct]);
+
+  const chartSeries = useMemo(() => {
+    if (!selected) return [];
+    const ens = selected.ensemble_daily;
+    const lstm = selected.lstm_daily;
+    const sea = selected.seasonal_daily;
+    const parseArr = (v) => {
+      if (Array.isArray(v)) return v;
+      if (typeof v === 'string') {
+        try {
+          return JSON.parse(v);
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
+    return [
+      { key: 'ensemble', label: 'Ensemble', values: parseArr(ens) },
+      { key: 'lstm', label: 'LSTM', values: parseArr(lstm) },
+      { key: 'seasonal', label: 'Seasonal', values: parseArr(sea) },
+    ];
+  }, [selected]);
+
   const { exportRef, exportToPdf } = usePdfExport('owner-dashboard.pdf');
 
   return (

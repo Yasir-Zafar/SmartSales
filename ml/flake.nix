@@ -6,32 +6,29 @@
   outputs = { self, nixpkgs }: let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
-    python = pkgs.python314;
+    
+    # Use 3.12 for maximum compatibility with ML libs and Supabase
+    python = pkgs.python312;
+
+    pythonEnv = python.withPackages (ps: with ps; [
+  fastapi uvicorn pydantic python-multipart requests python-dotenv
+  pandas numpy torch scikit-learn psycopg2
+    ]);
   in {
     devShells.${system}.default = pkgs.mkShell {
       buildInputs = [
-        python
-        python.pkgs.pip
-        python.pkgs.fastapi
-        python.pkgs.uvicorn
-        python.pkgs.pandas
-        python.pkgs.scikit-learn
-        python.pkgs.pydantic
-        python.pkgs.requests
-        python.pkgs.python-dotenv
-        python.pkgs.psycopg2
-        pkgs.uv
+        pythonEnv
+        pkgs.libpqxx
+        pkgs.postgresql # Provides pg_config often needed by psycopg2
       ];
 
       shellHook = ''
-        export PYTHONPATH=$PWD
-
-        if [ ! -d "venv" ]; then
-          uv venv venv --python 3.14
-        fi
-
-        source venv/bin/activate
-        uv pip install supabase
+  export PYTHONPATH=$PWD
+  if [ ! -d .venv ]; then
+    uv venv .venv
+    uv pip install supabase
+  fi
+  source .venv/bin/activate
       '';
     };
   };
