@@ -2,6 +2,89 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
+const API_URL = 'http://localhost:5000/api';
+
+// Mini chart
+function WeekBarChart({ data }) {
+  if (!data?.length) return null;
+  const max = Math.max(...data.map((d) => d.revenue), 1);
+  const W = 340, H = 72, barW = Math.floor(W / data.length) - 4;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto mt-3">
+      {data.map((d, i) => {
+        const barH = Math.max(4, (d.revenue / max) * (H - 20));
+        const x = i * (W / data.length) + 2;
+        const y = H - 14 - barH;
+        const label = new Date(d.date + 'T00:00:00Z').toLocaleDateString('en-US', {
+          weekday: 'short', timeZone: 'UTC',
+        });
+        return (
+          <g key={d.date}>
+            <rect x={x} y={y} width={barW} height={barH} rx="3" fill="#2dd4bf" opacity="0.85" />
+            <text x={x + barW / 2} y={H - 2} textAnchor="middle" fontSize="9" fill="#6b7280">
+              {label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// Sales Summary component
+function SalesSummary() {
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_URL}/insights/staff/sales-summary`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        setSummary(data);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  if (loading) return <p className="text-gray-400 mt-8">Loading sales summary...</p>;
+  if (error) return <p className="text-red-400 mt-8">{error}</p>;
+
+  const { today, week } = summary;
+
+  return (
+    <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      {/* Today */}
+      <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+        <h4 className="text-sm text-gray-400">Today's Sales (Live)</h4>
+        <p className="text-2xl text-teal-400 mt-2">${today.revenue}</p>
+        <p className="text-gray-500 text-sm">{today.transactions} transactions</p>
+      </div>
+
+      {/* Week */}
+      <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+        <h4 className="text-sm text-gray-400">This Week (Live)</h4>
+        <p className="text-2xl text-purple-400 mt-2">${week.revenue}</p>
+        <p className="text-gray-500 text-sm">{week.transactions} transactions</p>
+
+        <WeekBarChart data={week.dailyBreakdown} />
+      </div>
+
+    </div>
+  );
+}
+
 export const StaffDashboard = () => {
   const { user } = useAuth();
 
@@ -188,18 +271,8 @@ export const StaffDashboard = () => {
           )}
         </div>
 
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h4 className="text-sm font-medium text-gray-400 uppercase">Today's Sales</h4>
-            <p className="text-3xl font-bold text-teal-500 mt-2">$4,250</p>
-            <p className="text-xs text-gray-500 mt-1">24 transactions</p>
-          </div>
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h4 className="text-sm font-medium text-gray-400 uppercase">Pending Orders</h4>
-            <p className="text-3xl font-bold text-pink-500 mt-2">12</p>
-            <p className="text-xs text-gray-500 mt-1">Need attention</p>
-          </div>
-        </div>
+        {/* Live Sales Summary (NEW - does NOT remove your hardcoded stats) */}
+        <SalesSummary />
 
         {/* Cards */}
         <div className="mt-8 grid grid-cols-1 gap-6">
