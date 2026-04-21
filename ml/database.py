@@ -27,26 +27,43 @@ def persist_forecast_snapshots(rows: List[Dict[str, Any]]) -> Optional[str]:
     """
     Insert one batch of forecast rows into ml_forecast_snapshots.
     Each row dict must include: product_name, category, forecast_start, forecast_end,
-    ensemble_daily, lstm_daily, seasonal_daily, metrics (dict), ensemble_total_30d.
+    ensemble_daily, lstm_daily, seasonal_daily, metrics (dict), ensemble_total_5d.
     Returns run_batch_id or None if skipped/failed.
     """
     url = get_database_url()
-    if not url or not rows or psycopg2 is None:
+
+    # Check if database connection is configured
+    if not url:
+        print("[SmartSales] ⚠️  DATABASE_URL not configured. Skipping forecast persistence.")
+        print("[SmartSales] Set DATABASE_URL environment variable to enable database persistence.")
+        return None
+
+    if not rows:
+        print("[SmartSales] No forecast rows to persist.")
+        return None
+
+    if psycopg2 is None:
+        print("[SmartSales] ⚠️  psycopg2 not installed. Install with: pip install psycopg2-binary")
         return None
 
     run_batch_id = str(uuid.uuid4())
     sql = """
     INSERT INTO ml_forecast_snapshots (
       run_batch_id, product_name, category, forecast_start, forecast_end,
-      ensemble_daily, lstm_daily, seasonal_daily, metrics, ensemble_total_30d
+      ensemble_daily, lstm_daily, seasonal_daily, metrics, ensemble_total_5d
     ) VALUES (
       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
     )
     """
+
+    conn = None
     try:
-        conn = psycopg2.connect(url)
+        print(f"[SmartSales] Connecting to database...")
+        conn = psycopg2.connect(url, connect_timeout=10)
         cur = conn.cursor()
-        for r in rows:
+
+        print(f"[SmartSales] Persisting {len(rows)} forecast snapshots...")
+        for i, r in enumerate(rows):
             cur.execute(
                 sql,
                 (
@@ -59,15 +76,25 @@ def persist_forecast_snapshots(rows: List[Dict[str, Any]]) -> Optional[str]:
                     PgJson(r["lstm_daily"]),
                     PgJson(r["seasonal_daily"]),
                     PgJson(r.get("metrics") or {}),
-                    r.get("ensemble_total_30d"),
+                    r.get("ensemble_total_5d"),
                 ),
             )
+            if (i + 1) % 50 == 0:
+                print(f"[SmartSales] Saved {i + 1}/{len(rows)} snapshots...")
+
         conn.commit()
         cur.close()
         conn.close()
+        print(f"[SmartSales] ✅ Successfully persisted {len(rows)} forecasts (batch: {run_batch_id})")
         return run_batch_id
-    except Exception as e:  # pragma: no cover
-        print(f"[SmartSales] persist_forecast_snapshots failed: {e}")
+    except Exception as e:
+        print(f"[SmartSales] ❌ Database error: {type(e).__name__}: {e}")
+        print(f"[SmartSales] Check your DATABASE_URL is correct and database is accessible.")
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
         return None
 
 
@@ -101,11 +128,11 @@ def build_forecast_rows_from_state(S, SEQ_LEN: int, FORECAST_HORIZON: int) -> Li
                 "category": prod_cat.get(product, ""),
                 "forecast_start": forecast_start,
                 "forecast_end": forecast_end,
-                "ensemble_daily": as_list(preds["ensemble"]),
-                "lstm_daily": as_list(preds["lstm"]),
-                "seasonal_daily": as_list(preds["seasonal"]),
+                "ensemble_daily": as_list(preds["ensemble"][:FORECAST_HORIZON]),
+                "lstm_daily": as_list(preds["lstm"][:FORECAST_HORIZON]),
+                "seasonal_daily": as_list(preds["seasonal"][:FORECAST_HORIZON]),
                 "metrics": mm,
-                "ensemble_total_30d": round(float(preds["ensemble"].sum()), 4),
+                "ensemble_total_5d": round(float(preds["ensemble"][:FORECAST_HORIZON].sum()), 4),
             }
         )
     return rows

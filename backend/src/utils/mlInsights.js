@@ -52,23 +52,23 @@ export function getHistoricalMeanDaily(meta, product) {
   return typeof mean === 'number' && Number.isFinite(mean) ? mean : null;
 }
 
-export function abnormalDropAlert({ product, ensemble_total_30d, mean_daily }) {
-  if (typeof ensemble_total_30d !== 'number' || !Number.isFinite(ensemble_total_30d)) return null;
+export function abnormalDropAlert({ product, ensemble_total_5d, mean_daily }) {
+  if (typeof ensemble_total_5d !== 'number' || !Number.isFinite(ensemble_total_5d)) return null;
   if (typeof mean_daily !== 'number' || !Number.isFinite(mean_daily)) return null;
 
   // _meta.json mean is the historical daily mean used for normalization.
-  // Compare 30d forecast total against a 30d baseline = mean_daily * 30.
-  const baseline30 = mean_daily * 30;
-  if (baseline30 <= 0) return null;
+  // Compare 5d forecast total against a 5d baseline = mean_daily * 5.
+  const baseline5d = mean_daily * 5;
+  if (baseline5d <= 0) return null;
 
-  const ratio = ensemble_total_30d / baseline30;
+  const ratio = ensemble_total_5d / baseline5d;
   if (ratio < 0.7) {
     return {
       type: 'ABNORMAL_DROP',
       title: 'Abnormal Drop',
       product: normalizeProductKey(product),
-      ensemble_total_30d,
-      baseline_total_30d: Number(baseline30.toFixed(2)),
+      ensemble_total_5d,
+      baseline_total_5d: Number(baseline5d.toFixed(2)),
       drop_pct: Number(((1 - ratio) * 100).toFixed(1)),
       severity: ratio < 0.5 ? 'high' : 'medium',
     };
@@ -101,9 +101,9 @@ function mean(arr) {
 export function trendDriverFromForecast(forecast) {
   const lstm = forecast?.models?.lstm?.daily;
   const seasonal = forecast?.models?.seasonal?.daily;
-  const ensembleTotal = forecast?.models?.ensemble?.total_30d;
-  const lstmTotal = forecast?.models?.lstm?.total_30d;
-  const seasonalTotal = forecast?.models?.seasonal?.total_30d;
+  const ensembleTotal = forecast?.models?.ensemble?.total;
+  const lstmTotal = forecast?.models?.lstm?.total;
+  const seasonalTotal = forecast?.models?.seasonal?.total;
 
   if (!Array.isArray(lstm) || !Array.isArray(seasonal) || lstm.length === 0 || seasonal.length === 0) {
     return { driver: 'Unknown', reason: 'Missing model series' };
@@ -132,13 +132,13 @@ export function trendDriverFromForecast(forecast) {
 export function staffActionFromInventoryRiskRow(row) {
   const product = normalizeProductKey(row?.product);
   const level = row?.risk_level;
-  const total = typeof row?.ensemble_total_30d === 'number' ? row.ensemble_total_30d : null;
+  const total = typeof row?.ensemble_total_5d === 'number' ? row.ensemble_total_5d : null;
   const cv = typeof row?.demand_volatility_cv === 'number' ? row.demand_volatility_cv : null;
 
   if (!product) return { headline: 'Review item', message: 'Check this product in inventory.' };
 
   const levelText = level === 'high' ? 'High risk' : level === 'medium' ? 'Medium risk' : 'Risk';
-  const volumeText = total != null ? `Expected demand is about ${Math.round(total)} units over 30 days.` : 'Expected demand is elevated.';
+  const volumeText = total != null ? `Expected demand is about ${Math.round(total)} units over 5 days.` : 'Expected demand is elevated.';
 
   if (cv != null && cv > 0.7) {
     return {

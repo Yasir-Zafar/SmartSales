@@ -429,14 +429,14 @@ def inventory_risk(
             "product":              product,
             "category":             prod_cat.get(product,""),
             "risk_level":           rl_,
-            "ensemble_total_30d":   round(total, 2),
+            "ensemble_total_5d":    round(total, 2),
             "demand_volatility_cv": round(cv, 3),
             "reasons":              reasons,
             "ensemble_mae":         mm.get("ensemble",{}).get("mae"),
             "action": f"Stock up on {product}. Expected {total:.0f} units over {FORECAST_HORIZON} days"
         })
 
-    risks.sort(key=lambda r: (r["risk_level"]=="high", r["ensemble_total_30d"]), reverse=True)
+    risks.sort(key=lambda r: (r["risk_level"]=="high", r["ensemble_total_5d"]), reverse=True)
     if level: risks = [r for r in risks if r["risk_level"] == level]
     return {"count": len(risks), "risks": risks}
 
@@ -465,6 +465,8 @@ def get_metrics(
             "seasonal_rmse": mm.get("seasonal",{}).get("rmse"),
             "ensemble_mae":  mm.get("ensemble",{}).get("mae"),
             "ensemble_rmse": mm.get("ensemble",{}).get("rmse"),
+            "best_model":    min(["lstm", "seasonal", "ensemble"],
+                                key=lambda m: mm.get(m, {}).get("mae", 9999)),
         })
 
     if sort_by != "product": rows.sort(key=lambda r: r[sort_by] or 9999)

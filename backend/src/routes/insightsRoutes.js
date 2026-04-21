@@ -8,6 +8,7 @@ import {
   analystSegments,
   staffInventoryRisk,
   staffCustomerUpsell,
+  staffSalesSummary,
 } from '../controllers/insightsController.js';
 
 const router = express.Router();
@@ -32,6 +33,9 @@ router.get('/staff/inventory/risk', authenticateToken, authorizeRoles('STAFF', '
 
 // Staff: customer segment + upsell hint (customerId currently maps to ML customer_id)
 router.get('/staff/customers/:customerId/upsell', authenticateToken, authorizeRoles('STAFF', 'ADMIN'), staffCustomerUpsell);
+
+// Staff: sales summary (today + week)
+router.get('/staff/sales-summary', authenticateToken, authorizeRoles('STAFF', 'ADMIN'), staffSalesSummary);
 
 export default router;
 

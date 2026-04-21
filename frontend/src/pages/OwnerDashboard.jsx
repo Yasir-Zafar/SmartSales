@@ -158,10 +158,19 @@ export const OwnerDashboard = () => {
       }
       return [];
     };
+    const ensembleVals = parseArr(selected.ensemble_daily);
+    const lstmVals = parseArr(selected.lstm_daily);
+    const seasonalVals = parseArr(selected.seasonal_daily);
+
+    // Only return series if we have data
+    if (ensembleVals.length === 0 && lstmVals.length === 0 && seasonalVals.length === 0) {
+      return [];
+    }
+
     return [
-      { key: 'ensemble', values: parseArr(selected.ensemble_daily) },
-      { key: 'lstm', values: parseArr(selected.lstm_daily) },
-      { key: 'seasonal', values: parseArr(selected.seasonal_daily) },
+      { key: 'ensemble', values: ensembleVals },
+      { key: 'lstm', values: lstmVals },
+      { key: 'seasonal', values: seasonalVals },
     ];
   }, [selected]);
 
@@ -227,12 +236,55 @@ export const OwnerDashboard = () => {
 
         {/* Forecast Chart */}
         <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
-          <h3 className="text-lg font-semibold text-gray-50 mb-4">Sales Forecast</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-50">5-Day Sales Forecast</h3>
+            {products.length > 0 && (
+              <select
+                value={selectedProduct}
+                onChange={(e) => setSelectedProduct(e.target.value)}
+                className="bg-gray-700 text-gray-200 text-sm px-3 py-1.5 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                {products.map((p) => (
+                  <option key={p.product_name} value={p.product_name}>
+                    {p.product_name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
           {loading && <p className="text-gray-400 text-sm">Loading forecasts…</p>}
           {error && <p className="text-red-400 text-sm">{error}</p>}
-          {!loading && !error && (
-            <LineChart series={chartSeries} legend="Ensemble · LSTM · Seasonal" />
+          {!loading && !error && products.length === 0 && (
+            <p className="text-gray-400 text-sm">No forecast data available. Upload sales data first.</p>
+          )}
+          {!loading && !error && chartSeries.length > 0 && (
+            <>
+              <LineChart series={chartSeries} legend="Ensemble · LSTM · Seasonal (5-day forecast)" />
+              {selected && (
+                <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-500">Ensemble Total</p>
+                    <p className="text-teal-400 font-semibold text-lg">
+                      {selected.ensemble_total_5d || 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Forecast Period</p>
+                    <p className="text-gray-300">
+                      {selected.forecast_start} to {selected.forecast_end}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Category</p>
+                    <p className="text-gray-300 capitalize">{selected.category || 'N/A'}</p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+          {!loading && !error && chartSeries.length === 0 && products.length > 0 && (
+            <p className="text-amber-400 text-sm">No chart data available for this product.</p>
           )}
         </div>
 

@@ -37,7 +37,7 @@ export async function ownerAbnormalDrops(req, res) {
       const meanDaily = getHistoricalMeanDaily(meta, fc.product);
       const alert = abnormalDropAlert({
         product: fc.product,
-        ensemble_total_30d: fc?.models?.ensemble?.total_30d,
+        ensemble_total_5d: fc?.models?.ensemble?.total,
         mean_daily: meanDaily,
       });
       return res.json({ alerts: alert ? [alert] : [] });
@@ -49,7 +49,7 @@ export async function ownerAbnormalDrops(req, res) {
       const meanDaily = getHistoricalMeanDaily(meta, r.product);
       const alert = abnormalDropAlert({
         product: r.product,
-        ensemble_total_30d: r.ensemble_total_30d,
+        ensemble_total_5d: r.ensemble_total_5d,
         mean_daily: meanDaily,
       });
       if (alert) alerts.push(alert);
@@ -75,7 +75,7 @@ export async function analystForecast(req, res) {
 
     const { data: prior } = await supabaseAdmin
       .from('ml_forecast_snapshots')
-      .select('run_batch_id, created_at, ensemble_total_30d, metrics')
+      .select('run_batch_id, created_at, ensemble_total_5d, metrics')
       .eq('product_name', fc.product)
       .order('created_at', { ascending: false })
       .limit(5);
@@ -113,7 +113,7 @@ export async function staffInventoryRisk(req, res) {
         category: r.category,
         risk_level: r.risk_level,
         reasons: r.reasons,
-        ensemble_total_30d: r.ensemble_total_30d,
+        ensemble_total_5d: r.ensemble_total_5d,
         staff_action: staff,
       };
     });
@@ -200,6 +200,66 @@ export async function analystForecastSnapshots(req, res) {
 
     if (error) return res.status(400).json({ message: error.message });
     return res.json({ product, snapshots: data || [] });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+export async function staffSalesSummary(req, res) {
+  try {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - 7);
+
+    // Today's sales
+    const { data: todayData, error: todayError } = await supabaseAdmin
+      .from('daily_sales')
+      .select('total_price, quantity')
+      .gte('sale_date', todayStart.toISOString().split('T')[0]);
+
+    if (todayError) return res.status(400).json({ message: todayError.message });
+
+    const todayRevenue = todayData.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
+    const todayTransactions = todayData.length;
+
+    // Week's sales
+    const { data: weekData, error: weekError } = await supabaseAdmin
+      .from('daily_sales')
+      .select('sale_date, total_price, quantity')
+      .gte('sale_date', weekStart.toISOString().split('T')[0]);
+
+    if (weekError) return res.status(400).json({ message: weekError.message });
+
+    const weekRevenue = weekData.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
+    const weekTransactions = weekData.length;
+
+    // Daily breakdown for the week
+    const dailyBreakdown = {};
+    weekData.forEach(row => {
+      const date = row.sale_date;
+      if (!dailyBreakdown[date]) {
+        dailyBreakdown[date] = { date, revenue: 0, transactions: 0 };
+      }
+      dailyBreakdown[date].revenue += Number(row.total_price || 0);
+      dailyBreakdown[date].transactions += 1;
+    });
+
+    const dailyArray = Object.values(dailyBreakdown).sort((a, b) =>
+      new Date(a.date) - new Date(b.date)
+    );
+
+    return res.json({
+      today: {
+        revenue: todayRevenue.toFixed(2),
+        transactions: todayTransactions,
+      },
+      week: {
+        revenue: weekRevenue.toFixed(2),
+        transactions: weekTransactions,
+        dailyBreakdown: dailyArray,
+      },
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
