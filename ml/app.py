@@ -59,8 +59,8 @@ from database import build_forecast_rows_from_state, persist_forecast_snapshots
 ARTIFACTS = Path(os.environ.get("ARTIFACTS_DIR", "./artifacts"))
 CSV_PATH  = os.environ.get("CSV_PATH", "./flat_data.csv")
 
-SEQ_LEN          = int(os.environ.get("SEQ_LEN", 30))   # match training config
-FORECAST_HORIZON = 30
+SEQ_LEN          = int(os.environ.get("SEQ_LEN", 5))   # match training config
+FORECAST_HORIZON = 5
 
 app = FastAPI(
     title="SmartSales ML Service",
@@ -102,32 +102,50 @@ def _load_data(path_or_df):
 
 def _load_artifacts():
     model_dir = ARTIFACTS / "models"
-    seg_dir   = ARTIFACTS / "segmentation"
+    seg_dir = ARTIFACTS / "segmentation"
 
     with open(model_dir / "_meta.json") as f:
         S.meta = json.load(f)
 
+    # Only keep products that were actually trained (have models)
+    trained_products = set(S.meta.keys())
+    print(f"Loaded {len(trained_products)} trained models")
+
     S.ensembles = {}
     for product, info in S.meta.items():
-        ens = ForecastEnsemble(mean=info["mean"], std=info["std"],
-                               seq_len=SEQ_LEN, forecast_horizon=FORECAST_HORIZON)
-        s  = product.replace(" ", "_").replace("/", "-")
+        ens = ForecastEnsemble(
+            mean=info["mean"], 
+            std=info["std"],
+            seq_len=SEQ_LEN, 
+            forecast_horizon=FORECAST_HORIZON
+        )
+        s = product.replace(" ", "_").replace("/", "-")
         lp = model_dir / f"{s}.lstm.pt"
         sp = model_dir / f"{s}.seasonal.pt"
-        if lp.exists(): ens.lstm.load_state_dict(torch.load(lp, map_location="cpu"))
-        if sp.exists(): ens.seasonal.load_state_dict(torch.load(sp, map_location="cpu"))
-        S.ensembles[product] = ens
 
-    for fname, attr in [("kmeans.pkl","kmeans"),("scaler.pkl","scaler")]:
+        if lp.exists() and sp.exists():
+            ens.lstm.load_state_dict(torch.load(lp, map_location="cpu"))
+            ens.seasonal.load_state_dict(torch.load(sp, map_location="cpu"))
+            S.ensembles[product] = ens
+        else:
+            print(f"Warning: Missing model files for {product}")
+
+    # Load segmentation
+    for fname, attr in [("kmeans.pkl", "kmeans"), ("scaler.pkl", "scaler")]:
         with open(seg_dir / fname, "rb") as f:
             setattr(S, attr, pickle.load(f))
 
-    with open(seg_dir / "config.json")            as f: S.seg_config = json.load(f)
-    with open(seg_dir / "segment_profiles.json")  as f: S.profiles   = json.load(f)
+    with open(seg_dir / "config.json") as f:
+        S.seg_config = json.load(f)
+    with open(seg_dir / "segment_profiles.json") as f:
+        S.profiles = json.load(f)
 
     rp = ARTIFACTS / "training_report.json"
     if rp.exists():
-        with open(rp) as f: S.report = json.load(f)
+        with open(rp) as f:
+            S.report = json.load(f)
+
+    print(f"✅ Loaded {len(S.ensembles)} usable forecasting models")
 
 
 @app.on_event("startup")
@@ -216,83 +234,94 @@ def list_products():
 # ── Forecast: single product ──────────────────────────────────────────────────
 @app.get("/forecast/{product}")
 def get_forecast(product: str):
-    """
-    30-day daily forecast for one product.
-    All three models returned so Analyst can compare.
-    """
     _require_data()
-    product = product.lower()
+    
+    product = product.lower().strip()
+    
     if product not in S.ensembles:
-        raise HTTPException(404, f"No trained model for '{product}'. See /products.")
+        raise HTTPException(404, f"No trained model for '{product}'. Check /products")
+
     if product not in S.daily.columns or len(S.daily[product]) < SEQ_LEN:
-        raise HTTPException(422, "Not enough history for this product.")
+        raise HTTPException(422, f"Not enough history for '{product}'")
 
     series = S.daily[product].values.astype(float)
-    preds  = S.ensembles[product].predict(series[-SEQ_LEN:], len(series) - 1)
+    
+    preds = S.ensembles[product].predict(series[-SEQ_LEN:], len(series) - 1)
 
-    last_date      = S.daily.index[-1]
+    last_date = S.daily.index[-1]
     forecast_start = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    forecast_end   = (last_date + pd.Timedelta(days=FORECAST_HORIZON)).strftime("%Y-%m-%d")
+    forecast_end = (last_date + pd.Timedelta(days=FORECAST_HORIZON)).strftime("%Y-%m-%d")
 
     def block(arr):
-        return {"daily": rl(arr), "total_30d": round(float(arr.sum()),2),
-                "avg_daily": round(float(arr.mean()),2)}
+        # Take only first 5 days if model still outputs 30
+        short_arr = arr[:FORECAST_HORIZON]
+        return {
+            "daily": rl(short_arr),
+            "total": round(float(short_arr.sum()), 2),
+            "avg_daily": round(float(short_arr.mean()), 2)
+        }
 
-    mm   = S.meta.get(product, {}).get("metrics", {})
-    best = min(["lstm","seasonal","ensemble"], key=lambda m: mm.get(m,{}).get("mae",9999))
+    mm = S.meta.get(product, {}).get("metrics", {})
+    best = min(["lstm", "seasonal", "ensemble"], 
+               key=lambda m: mm.get(m, {}).get("mae", 9999))
 
-    # Category for this product
-    category = S.df[S.df["product_name"]==product]["category"].iloc[0] \
-               if not S.df[S.df["product_name"]==product].empty else ""
+    category = S.df[S.df["product_name"] == product]["category"].iloc[0] \
+        if not S.df[S.df["product_name"] == product].empty else ""
 
     return {
-        "product":        product,
-        "category":       category,
+        "product": product,
+        "category": category,
         "forecast_start": forecast_start,
-        "forecast_end":   forecast_end,
-        "models":         {k: block(v) for k, v in preds.items()},
-        "metrics":        mm,
-        "best_model":     best,
+        "forecast_end": forecast_end,
+        "horizon_days": FORECAST_HORIZON,
+        "models": {k: block(v) for k, v in preds.items()},
+        "metrics": mm,
+        "best_model": best,
     }
 
 
 # ── Forecast: all products ────────────────────────────────────────────────────
+# Replace the whole get_all_forecasts function with this:
 @app.get("/forecasts")
 def get_all_forecasts(
-    limit:    int           = Query(default=50, le=200),
-    sort_by:  str           = Query(default="ensemble_total",
-                                    enum=["ensemble_total","mae","product"]),
+    limit: int = Query(default=50, le=200),
+    sort_by: str = Query(default="ensemble_total", enum=["ensemble_total","mae","product"]),
     category: Optional[str] = Query(default=None),
 ):
-    """Summary row per product. Optional ?category= filter."""
     _require_data()
-
     prod_cat = (
         S.df.drop_duplicates("product_name")
         .set_index("product_name")["category"].to_dict()
     )
-
     rows = []
     for product, ens in S.ensembles.items():
-        if category and prod_cat.get(product,"") != category.lower(): continue
-        if product not in S.daily.columns or len(S.daily[product]) < SEQ_LEN: continue
+        if category and prod_cat.get(product,"").lower() != category.lower(): 
+            continue
+        if product not in S.daily.columns or len(S.daily[product]) < SEQ_LEN: 
+            continue
+            
         series = S.daily[product].values.astype(float)
-        preds  = ens.predict(series[-SEQ_LEN:], len(series)-1)
-        mm     = S.meta.get(product, {}).get("metrics", {})
+        preds = ens.predict(series[-SEQ_LEN:], len(series)-1)
+        mm = S.meta.get(product, {}).get("metrics", {})
+        
+        ensemble_5d = float(preds["ensemble"][:FORECAST_HORIZON].sum())
+        
         rows.append({
-            "product":            product,
-            "category":           prod_cat.get(product,""),
-            "lstm_total_30d":     round(float(preds["lstm"].sum()),    2),
-            "seasonal_total_30d": round(float(preds["seasonal"].sum()),2),
-            "ensemble_total_30d": round(float(preds["ensemble"].sum()),2),
-            "lstm_mae":           mm.get("lstm",     {}).get("mae"),
-            "seasonal_mae":       mm.get("seasonal", {}).get("mae"),
-            "ensemble_mae":       mm.get("ensemble", {}).get("mae"),
+            "product": product,
+            "category": prod_cat.get(product,""),
+            "ensemble_total_5d": round(ensemble_5d, 2),     # ← Fixed
+            "lstm_mae": mm.get("lstm", {}).get("mae"),
+            "seasonal_mae": mm.get("seasonal", {}).get("mae"),
+            "ensemble_mae": mm.get("ensemble", {}).get("mae"),
         })
 
-    if sort_by == "ensemble_total": rows.sort(key=lambda r: r["ensemble_total_30d"], reverse=True)
-    elif sort_by == "mae":          rows.sort(key=lambda r: r["ensemble_mae"] or 9999)
-    else:                           rows.sort(key=lambda r: r["product"])
+    # Updated sorting
+    if sort_by == "ensemble_total":
+        rows.sort(key=lambda r: r["ensemble_total_5d"], reverse=True)
+    elif sort_by == "mae":
+        rows.sort(key=lambda r: r["ensemble_mae"] or 9999)
+    else:
+        rows.sort(key=lambda r: r["product"])
 
     return {"count": len(rows), "forecasts": rows[:limit]}
 
@@ -404,11 +433,7 @@ def inventory_risk(
             "demand_volatility_cv": round(cv, 3),
             "reasons":              reasons,
             "ensemble_mae":         mm.get("ensemble",{}).get("mae"),
-            "action": (
-                f"Stock up on {product}. "
-                f"Expected {total:.0f} units over 30 days"
-                + (" with unpredictable daily swings." if cv > 0.7 else ".")
-            ),
+            "action": f"Stock up on {product}. Expected {total:.0f} units over {FORECAST_HORIZON} days"
         })
 
     risks.sort(key=lambda r: (r["risk_level"]=="high", r["ensemble_total_30d"]), reverse=True)
@@ -466,6 +491,6 @@ def summary():
         **stats,
         "models_loaded":  len(S.ensembles),
         "avg_metrics":    S.report.get("avg_metrics",{}),
-        "top_5_products": [{"product":p,"ensemble_total_30d":round(t,2)} for p,t in totals[:5]],
+        "top_5_products": [{"product":p,"ensemble_total_5d":round(t,2)} for p,t in totals[:5]],
         "segments":       [{"label":p["label"],"size":p["size"]} for p in S.profiles],
     }
