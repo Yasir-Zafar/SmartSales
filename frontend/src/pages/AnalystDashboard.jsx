@@ -201,7 +201,7 @@ export const AnalystDashboard = () => {
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
             <h3 className="text-lg font-semibold text-gray-50 mb-4">Product forecast &amp; accuracy</h3>
             <p className="text-xs text-gray-500 mb-3">Enter a product name (lowercase, as in ML artifacts).</p>
@@ -225,8 +225,12 @@ export const AnalystDashboard = () => {
             {forecastData && (
               <div className="mt-4 space-y-2 text-sm">
                 <p className="text-gray-300">
-                  <span className="text-gray-500">30d total (ensemble):</span>{' '}
-                  <span className="text-teal-400 font-semibold">{ens?.total_30d}</span>
+                  <span className="text-gray-500">5-day total (ensemble):</span>{' '}
+                  <span className="text-teal-400 font-semibold">{ens?.total || 'N/A'}</span>
+                </p>
+                <p className="text-gray-300">
+                  <span className="text-gray-500">Avg daily (ensemble):</span>{' '}
+                  <span className="text-purple-400 font-semibold">{ens?.avg_daily || 'N/A'}</span>
                 </p>
                 <p className="text-gray-300">
                   <span className="text-gray-500">MAE (ensemble):</span>{' '}
@@ -238,19 +242,25 @@ export const AnalystDashboard = () => {
                 </p>
                 <p className="text-gray-300">
                   <span className="text-gray-500">Confidence:</span>{' '}
-                  {forecastData.analyst?.confidence_rating} — {forecastData.analyst?.confidence_reason}
+                  <span className={`font-semibold ${
+                    forecastData.analyst?.confidence_rating === 'High' ? 'text-green-400' :
+                    forecastData.analyst?.confidence_rating === 'Medium' ? 'text-yellow-400' :
+                    'text-red-400'
+                  }`}>
+                    {forecastData.analyst?.confidence_rating}
+                  </span> — {forecastData.analyst?.confidence_reason}
                 </p>
                 <p className="text-gray-400 text-xs">
-                  Trend driver: {forecastData.analyst?.trend_driver} — {forecastData.analyst?.trend_reason}
+                  Trend driver: <span className="text-teal-300">{forecastData.analyst?.trend_driver}</span> — {forecastData.analyst?.trend_reason}
                 </p>
                 {forecastData.analyst?.previous_persisted_runs?.length > 0 && (
                   <div className="mt-3 border-t border-gray-700 pt-3">
-                    <p className="text-gray-500 text-xs mb-2">Recent persisted forecast totals (same product)</p>
+                    <p className="text-gray-500 text-xs mb-2">Recent persisted forecast totals (5-day, same product)</p>
                     <ul className="text-xs text-gray-400 space-y-1">
                       {forecastData.analyst.previous_persisted_runs.map((r, i) => (
                         <li key={i}>
                           {r.created_at ? new Date(r.created_at).toLocaleString() : '—'} — total{' '}
-                          {r.ensemble_total_30d}
+                          {r.ensemble_total_5d || 'N/A'}
                         </li>
                       ))}
                     </ul>

@@ -12,7 +12,7 @@
 
     pythonEnv = python.withPackages (ps: with ps; [
   fastapi uvicorn pydantic python-multipart requests python-dotenv
-  pandas numpy torch scikit-learn psycopg2
+  pandas numpy torch scikit-learn psycopg2 httpx
     ]);
   in {
     devShells.${system}.default = pkgs.mkShell {

@@ -39,6 +39,10 @@ import pickle
 from pathlib import Path
 from typing import Optional
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 import numpy as np
 import pandas as pd
 import torch
@@ -148,17 +152,83 @@ def _load_artifacts():
     print(f"✅ Loaded {len(S.ensembles)} usable forecasting models")
 
 
+async def _auto_load_data_from_backend():
+    """Automatically load training data from backend on startup."""
+    backend_url = os.environ.get("BACKEND_URL", "http://localhost:5000")
+    internal_key = os.environ.get("ML_INTERNAL_API_KEY", "")
+    # Fixed date range: 2023-01-01 to today
+    from datetime import date
+    start_date = "2023-01-01"
+    end_date = date.today().isoformat()
+
+    try:
+        import httpx
+        url = f"{backend_url.rstrip('/')}/api/analyst/training-export/internal?startDate={start_date}&endDate={end_date}"
+        print(f"[SmartSales] Fetching training data from {start_date} to {end_date}...")
+
+        headers = {}
+        if internal_key:
+            headers["x-ml-internal-key"] = internal_key
+        else:
+            print("[SmartSales] ⚠️  ML_INTERNAL_API_KEY not set; backend internal export may reject startup sync")
+
+        for attempt in range(1, 6):
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, headers=headers)
+
+            if response.status_code == 200:
+                csv_content = response.text
+                _load_data(io.StringIO(csv_content))
+
+                # Persist forecasts to database if configured
+                snap_rows = build_forecast_rows_from_state(S, SEQ_LEN, FORECAST_HORIZON)
+                run_batch_id = persist_forecast_snapshots(snap_rows)
+
+                print(f"[SmartSales] ✅ Auto-loaded {len(S.df):,} rows from backend")
+                print(f"[SmartSales] Ready — {len(S.ensembles)} models | "
+                      f"{S.df['customer_id'].nunique():,} customers")
+                if run_batch_id:
+                    print(f"[SmartSales] Forecast batch persisted: {run_batch_id}")
+                return True
+
+            if response.status_code in (401, 403):
+                print(f"[SmartSales] ⚠️  Backend auth rejected startup sync ({response.status_code}). Check ML_INTERNAL_API_KEY.")
+                return False
+
+            print(f"[SmartSales] Startup sync attempt {attempt}/5 failed with {response.status_code}; retrying...")
+            import asyncio
+            await asyncio.sleep(2)
+
+        print("[SmartSales] ⚠️  Backend startup sync failed after retries, using local CSV fallback")
+        return False
+    except Exception as e:
+        print(f"[SmartSales] ⚠️  Could not fetch from backend: {e}")
+        print(f"[SmartSales] Falling back to local CSV if available")
+        return False
+
+
 @app.on_event("startup")
-def startup():
+async def startup():
     _load_artifacts()
-    csv = Path(CSV_PATH)
-    if csv.exists():
-        print(f"[SmartSales] Loading data from {csv}")
-        _load_data(str(csv))
-        print(f"[SmartSales] Ready — {len(S.ensembles)} models | "
-              f"{S.df['customer_id'].nunique():,} customers")
-    else:
-        print(f"[SmartSales] Artifacts loaded. Waiting for data via POST /reload")
+
+    # Try to auto-load from backend first
+    loaded = await _auto_load_data_from_backend()
+
+    # Fall back to local CSV if backend fetch failed
+    if not loaded:
+        csv = Path(CSV_PATH)
+        if csv.exists():
+            print(f"[SmartSales] Loading data from {csv}")
+            _load_data(str(csv))
+
+            # Persist forecasts to database if configured
+            snap_rows = build_forecast_rows_from_state(S, SEQ_LEN, FORECAST_HORIZON)
+            persist_forecast_snapshots(snap_rows)
+
+            print(f"[SmartSales] Ready — {len(S.ensembles)} models | "
+                  f"{S.df['customer_id'].nunique():,} customers")
+        else:
+            print(f"[SmartSales] ⚠️  No local CSV found. Waiting for data via POST /reload")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -429,14 +499,14 @@ def inventory_risk(
             "product":              product,
             "category":             prod_cat.get(product,""),
             "risk_level":           rl_,
-            "ensemble_total_30d":   round(total, 2),
+            "ensemble_total_5d":    round(total, 2),
             "demand_volatility_cv": round(cv, 3),
             "reasons":              reasons,
             "ensemble_mae":         mm.get("ensemble",{}).get("mae"),
             "action": f"Stock up on {product}. Expected {total:.0f} units over {FORECAST_HORIZON} days"
         })
 
-    risks.sort(key=lambda r: (r["risk_level"]=="high", r["ensemble_total_30d"]), reverse=True)
+    risks.sort(key=lambda r: (r["risk_level"]=="high", r["ensemble_total_5d"]), reverse=True)
     if level: risks = [r for r in risks if r["risk_level"] == level]
     return {"count": len(risks), "risks": risks}
 
@@ -465,6 +535,8 @@ def get_metrics(
             "seasonal_rmse": mm.get("seasonal",{}).get("rmse"),
             "ensemble_mae":  mm.get("ensemble",{}).get("mae"),
             "ensemble_rmse": mm.get("ensemble",{}).get("rmse"),
+            "best_model":    min(["lstm", "seasonal", "ensemble"],
+                                key=lambda m: mm.get(m, {}).get("mae", 9999)),
         })
 
     if sort_by != "product": rows.sort(key=lambda r: r[sort_by] or 9999)
@@ -493,4 +565,84 @@ def summary():
         "avg_metrics":    S.report.get("avg_metrics",{}),
         "top_5_products": [{"product":p,"ensemble_total_5d":round(t,2)} for p,t in totals[:5]],
         "segments":       [{"label":p["label"],"size":p["size"]} for p in S.profiles],
+    }
+
+
+# ── Abnormal Drop Detection ───────────────────────────────────────────────────
+@app.get("/alerts/abnormal-drops")
+def get_abnormal_drops(
+    severity: Optional[str] = Query(default=None, enum=["high", "medium", "low"]),
+    min_drop_pct: float = Query(default=30.0, ge=0, le=100),
+):
+    """
+    Detect products with abnormal sales drops by comparing current forecast
+    to historical baseline (average of past sales).
+    """
+    _require_data()
+
+    prod_cat = (
+        S.df.drop_duplicates("product_name")
+        .set_index("product_name")["category"].to_dict()
+    )
+
+    alerts = []
+
+    for product, ens in S.ensembles.items():
+        if product not in S.daily.columns or len(S.daily[product]) < SEQ_LEN * 2:
+            continue
+
+        series = S.daily[product].values.astype(float)
+
+        # Current forecast (next 5 days)
+        preds = ens.predict(series[-SEQ_LEN:], len(series) - 1)
+        ensemble_total_5d = float(preds["ensemble"][:FORECAST_HORIZON].sum())
+
+        # Baseline: average of last 10 days of actual sales (or available history)
+        lookback = min(10, len(series) - FORECAST_HORIZON)
+        if lookback < 5:
+            continue
+
+        baseline_daily_avg = float(series[-lookback:].mean())
+        baseline_total_5d = baseline_daily_avg * FORECAST_HORIZON
+
+        # Calculate drop percentage
+        if baseline_total_5d < 0.01:  # Avoid division by zero for very low sales
+            continue
+
+        drop_pct = ((baseline_total_5d - ensemble_total_5d) / baseline_total_5d) * 100
+
+        # Only flag if there's a significant drop
+        if drop_pct < min_drop_pct:
+            continue
+
+        # Determine severity
+        if drop_pct >= 60:
+            sev = "high"
+        elif drop_pct >= 40:
+            sev = "medium"
+        else:
+            sev = "low"
+
+        alerts.append({
+            "type": "ABNORMAL_DROP",
+            "title": "Abnormal Drop",
+            "product": product,
+            "category": prod_cat.get(product, ""),
+            "ensemble_total_5d": round(ensemble_total_5d, 2),
+            "baseline_total_5d": round(baseline_total_5d, 2),
+            "drop_pct": round(drop_pct, 1),
+            "severity": sev,
+        })
+
+    # Filter by severity if requested
+    if severity:
+        alerts = [a for a in alerts if a["severity"] == severity]
+
+    # Sort by severity (high first) then by drop percentage
+    severity_order = {"high": 0, "medium": 1, "low": 2}
+    alerts.sort(key=lambda a: (severity_order[a["severity"]], -a["drop_pct"]))
+
+    return {
+        "count": len(alerts),
+        "alerts": alerts,
     }

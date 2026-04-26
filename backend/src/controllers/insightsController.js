@@ -27,35 +27,55 @@ async function mlGet(path, query = {}) {
   return data;
 }
 
+async function computeAbnormalDropAlerts({ product = null, severity = null, minDropPct = null }) {
+  const meta = await loadMeta();
+
+  if (product) {
+    const fc = await mlGet(`/forecast/${encodeURIComponent(product)}`);
+    const meanDaily = getHistoricalMeanDaily(meta, fc.product);
+    const alert = abnormalDropAlert({
+      product: fc.product,
+      ensemble_total_5d: fc?.models?.ensemble?.total,
+      mean_daily: meanDaily,
+    });
+    if (!alert) return [];
+    if (severity && alert.severity !== severity) return [];
+    if (minDropPct != null && Number(alert.drop_pct) < Number(minDropPct)) return [];
+    return [alert];
+  }
+
+  const rows = await mlGet('/forecasts', { limit: 200, sort_by: 'product' });
+  const alerts = [];
+  for (const r of rows?.forecasts || []) {
+    const meanDaily = getHistoricalMeanDaily(meta, r.product);
+    const alert = abnormalDropAlert({
+      product: r.product,
+      ensemble_total_5d: r.ensemble_total_5d,
+      mean_daily: meanDaily,
+    });
+    if (alert) alerts.push(alert);
+  }
+
+  let filtered = alerts;
+  if (severity) {
+    filtered = filtered.filter((a) => a.severity === severity);
+  }
+  if (minDropPct != null) {
+    filtered = filtered.filter((a) => Number(a.drop_pct) >= Number(minDropPct));
+  }
+
+  filtered.sort((a, b) => (a.severity === 'high' ? -1 : 1) - (b.severity === 'high' ? -1 : 1));
+  return filtered;
+}
+
 export async function ownerAbnormalDrops(req, res) {
   try {
-    const meta = await loadMeta();
     const product = req.query.product ? String(req.query.product) : null;
-
-    if (product) {
-      const fc = await mlGet(`/forecast/${encodeURIComponent(product)}`);
-      const meanDaily = getHistoricalMeanDaily(meta, fc.product);
-      const alert = abnormalDropAlert({
-        product: fc.product,
-        ensemble_total_30d: fc?.models?.ensemble?.total_30d,
-        mean_daily: meanDaily,
-      });
-      return res.json({ alerts: alert ? [alert] : [] });
-    }
-
-    const rows = await mlGet('/forecasts', { limit: 200, sort_by: 'product' });
-    const alerts = [];
-    for (const r of rows?.forecasts || []) {
-      const meanDaily = getHistoricalMeanDaily(meta, r.product);
-      const alert = abnormalDropAlert({
-        product: r.product,
-        ensemble_total_30d: r.ensemble_total_30d,
-        mean_daily: meanDaily,
-      });
-      if (alert) alerts.push(alert);
-    }
-
-    alerts.sort((a, b) => (a.severity === 'high' ? -1 : 1) - (b.severity === 'high' ? -1 : 1));
+    const alerts = await computeAbnormalDropAlerts({
+      product,
+      severity: req.query.severity ? String(req.query.severity) : null,
+      minDropPct: req.query.min_drop_pct,
+    });
     return res.json({ count: alerts.length, alerts });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.message });
@@ -75,7 +95,7 @@ export async function analystForecast(req, res) {
 
     const { data: prior } = await supabaseAdmin
       .from('ml_forecast_snapshots')
-      .select('run_batch_id, created_at, ensemble_total_30d, metrics')
+      .select('run_batch_id, created_at, ensemble_total_5d, metrics')
       .eq('product_name', fc.product)
       .order('created_at', { ascending: false })
       .limit(5);
@@ -113,7 +133,7 @@ export async function staffInventoryRisk(req, res) {
         category: r.category,
         risk_level: r.risk_level,
         reasons: r.reasons,
-        ensemble_total_30d: r.ensemble_total_30d,
+        ensemble_total_5d: r.ensemble_total_5d,
         staff_action: staff,
       };
     });
@@ -176,6 +196,19 @@ export async function ownerLatestForecasts(req, res) {
   }
 }
 
+export async function ownerForecasts(req, res) {
+  try {
+    const data = await mlGet('/forecasts', {
+      limit: req.query.limit || 50,
+      sort_by: req.query.sort_by || 'ensemble_total',
+      category: req.query.category,
+    });
+    return res.json(data);
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
+  }
+}
+
 export async function analystSegments(req, res) {
   try {
     const data = await mlGet('/segments');
@@ -202,5 +235,91 @@ export async function analystForecastSnapshots(req, res) {
     return res.json({ product, snapshots: data || [] });
   } catch (err) {
     return res.status(500).json({ message: err.message });
+  }
+}
+
+export async function staffSalesSummary(req, res) {
+  try {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(todayStart);
+    weekStart.setDate(weekStart.getDate() - 7);
+
+    // Today's sales
+    const { data: todayData, error: todayError } = await supabaseAdmin
+      .from('daily_sales')
+      .select('total_price, quantity')
+      .gte('sale_date', todayStart.toISOString().split('T')[0]);
+
+    if (todayError) return res.status(400).json({ message: todayError.message });
+
+    const todayRevenue = todayData.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
+    const todayTransactions = todayData.length;
+
+    // Week's sales
+    const { data: weekData, error: weekError } = await supabaseAdmin
+      .from('daily_sales')
+      .select('sale_date, total_price, quantity')
+      .gte('sale_date', weekStart.toISOString().split('T')[0]);
+
+    if (weekError) return res.status(400).json({ message: weekError.message });
+
+    const weekRevenue = weekData.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
+    const weekTransactions = weekData.length;
+
+    // Daily breakdown for the week
+    const dailyBreakdown = {};
+    weekData.forEach(row => {
+      const date = row.sale_date;
+      if (!dailyBreakdown[date]) {
+        dailyBreakdown[date] = { date, revenue: 0, transactions: 0 };
+      }
+      dailyBreakdown[date].revenue += Number(row.total_price || 0);
+      dailyBreakdown[date].transactions += 1;
+    });
+
+    const dailyArray = Object.values(dailyBreakdown).sort((a, b) =>
+      new Date(a.date) - new Date(b.date)
+    );
+
+    return res.json({
+      today: {
+        revenue: todayRevenue.toFixed(2),
+        transactions: todayTransactions,
+      },
+      week: {
+        revenue: weekRevenue.toFixed(2),
+        transactions: weekTransactions,
+        dailyBreakdown: dailyArray,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+export async function analystForecasts(req, res) {
+  try {
+    const data = await mlGet('/forecasts', {
+      limit: req.query.limit || 50,
+      sort_by: req.query.sort_by || 'ensemble_total',
+      category: req.query.category,
+    });
+    return res.json(data);
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
+  }
+}
+
+export async function analystAbnormalDrops(req, res) {
+  try {
+    const alerts = await computeAbnormalDropAlerts({
+      product: req.query.product ? String(req.query.product) : null,
+      severity: req.query.severity ? String(req.query.severity) : null,
+      minDropPct: req.query.min_drop_pct,
+    });
+    return res.json({ count: alerts.length, alerts });
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
   }
 }

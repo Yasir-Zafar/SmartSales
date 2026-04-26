@@ -1,56 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
 const API_URL = 'http://localhost:5000/api';
-
-// ─── Line Chart ───────────────────────────────────────────────────────────────
-function LineChart({ series, legend, height = 220 }) {
-  const w = 600;
-  const pad = 24;
-  if (!series?.length) return <p className="text-gray-500 text-sm">No series data.</p>;
-
-  const all = series.flatMap((s) => s.values || []);
-  const minV = Math.min(...all, 0);
-  const maxV = Math.max(...all, 1);
-  const span = maxV - minV || 1;
-  const innerW = w - pad * 2;
-  const innerH = height - pad * 2;
-
-  const pointsFor = (values) =>
-    (values || []).map((v, i) => {
-      const x = pad + (i / Math.max(values.length - 1, 1)) * innerW;
-      const y = pad + innerH - ((Number(v) - minV) / span) * innerH;
-      return `${x},${y}`;
-    });
-
-  const colors = ['#2dd4bf', '#f472b6', '#a78bfa'];
-
-  return (
-    <div>
-      <p className="text-xs text-gray-500 mb-2">{legend}</p>
-      <svg viewBox={`0 0 ${w} ${height}`} className="w-full max-w-3xl h-auto">
-        {[0, 0.25, 0.5, 0.75, 1].map((t) => {
-          const y = pad + innerH - t * innerH;
-          return (
-            <line key={t} x1={pad} y1={y} x2={w - pad} y2={y} stroke="#374151" strokeWidth="1" />
-          );
-        })}
-        {series.map((s, idx) => (
-          <polyline
-            key={s.key}
-            fill="none"
-            stroke={colors[idx % colors.length]}
-            strokeWidth="2"
-            points={pointsFor(s.values).join(' ')}
-          />
-        ))}
-      </svg>
-    </div>
-  );
-}
 
 // ─── PDF Export Hook ──────────────────────────────────────────────────────────
 const usePdfExport = (filename = 'dashboard.pdf') => {
@@ -105,65 +59,22 @@ const STATS = [
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const OwnerDashboard = () => {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [alerts, setAlerts] = useState([]);
   const [forecastBatch, setForecastBatch] = useState(null);
-  const [selectedProduct, setSelectedProduct] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     const load = async () => {
-      setLoading(true);
-      setError('');
       try {
-        const [fcRes, alRes] = await Promise.all([
-          axios.get(`${API_URL}/insights/owner/forecasts/latest`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get(`${API_URL}/insights/owner/alerts/abnormal-drops`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
+        const fcRes = await axios.get(`${API_URL}/insights/owner/forecasts/latest`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         setForecastBatch(fcRes.data);
-        setAlerts(alRes.data?.alerts || []);
       } catch (e) {
-        setError(e.response?.data?.message || e.message || 'Could not load forecasts');
-      } finally {
-        setLoading(false);
+        console.error('Owner forecasts load failed', e);
       }
     };
     load();
   }, []);
-
-  const products = forecastBatch?.products || [];
-
-  const selected = useMemo(
-    () => products.find((p) => p.product_name === selectedProduct),
-    [products, selectedProduct]
-  );
-
-  useEffect(() => {
-    if (!selectedProduct && products[0]?.product_name) {
-      setSelectedProduct(products[0].product_name);
-    }
-  }, [products, selectedProduct]);
-
-  const chartSeries = useMemo(() => {
-    if (!selected) return [];
-    const parseArr = (v) => {
-      if (Array.isArray(v)) return v;
-      if (typeof v === 'string') {
-        try { return JSON.parse(v); } catch { return []; }
-      }
-      return [];
-    };
-    return [
-      { key: 'ensemble', values: parseArr(selected.ensemble_daily) },
-      { key: 'lstm', values: parseArr(selected.lstm_daily) },
-      { key: 'seasonal', values: parseArr(selected.seasonal_daily) },
-    ];
-  }, [selected]);
 
   const { exportRef, exportToPdf } = usePdfExport('owner-dashboard.pdf');
 
@@ -213,27 +124,30 @@ export const OwnerDashboard = () => {
           </div>
         </div>
 
-        {/* Alerts */}
-        {alerts.length > 0 && (
-          <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Abnormal Drop Alerts</h3>
-            <ul className="space-y-2">
-              {alerts.map((a, i) => (
-                <li key={i} className="text-sm text-red-400">{JSON.stringify(a)}</li>
-              ))}
-            </ul>
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-red-500/20">
+            <h3 className="text-lg font-semibold text-gray-50 mb-2">Abnormal Drop Alerts</h3>
+            <p className="text-gray-400 text-sm mb-4">Moved to a dedicated page for easier monitoring.</p>
+            <Link
+              to="/owner/alerts"
+              className="inline-flex items-center justify-center bg-red-500 hover:bg-red-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+            >
+              Open Alerts Page
+            </Link>
           </div>
-        )}
-
-        {/* Forecast Chart */}
-        <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
-          <h3 className="text-lg font-semibold text-gray-50 mb-4">Sales Forecast</h3>
-
-          {loading && <p className="text-gray-400 text-sm">Loading forecasts…</p>}
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-          {!loading && !error && (
-            <LineChart series={chartSeries} legend="Ensemble · LSTM · Seasonal" />
-          )}
+          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-teal-500/20">
+            <h3 className="text-lg font-semibold text-gray-50 mb-2">5-Day Sales Forecast</h3>
+            <p className="text-gray-400 text-sm mb-4">Moved from Analyst to a dedicated owner page.</p>
+            <Link
+              to="/owner/forecasts"
+              className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+            >
+              Open Forecast Page
+            </Link>
+            <p className="text-xs text-gray-500 mt-3">
+              Latest batch: {forecastBatch?.created_at ? new Date(forecastBatch.created_at).toLocaleString() : 'N/A'}
+            </p>
+          </div>
         </div>
 
       </div>

@@ -10,6 +10,17 @@ export async function loginEndpointSupabaseAuth(req, res) {
     });
 
     if (authError || !authData.user) {
+      // Log failed login attempt
+      await supabaseAdmin
+        .from('failed_login_attempts')
+        .insert({
+          email: email || 'unknown',
+          ip_address: req.ip || req.connection?.remoteAddress,
+          user_agent: req.headers['user-agent'],
+          reason: authError?.message || 'Invalid credentials',
+        })
+        .catch(err => console.error('Failed to log login attempt:', err));
+
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
@@ -22,10 +33,32 @@ export async function loginEndpointSupabaseAuth(req, res) {
 
     if (profileError || !profile) {
       console.error('Profile lookup error:', profileError);
+      // Log failed login attempt
+      await supabaseAdmin
+        .from('failed_login_attempts')
+        .insert({
+          email: email || authData.user.email,
+          ip_address: req.ip || req.connection?.remoteAddress,
+          user_agent: req.headers['user-agent'],
+          reason: 'Profile not found',
+        })
+        .catch(err => console.error('Failed to log login attempt:', err));
+
       return res.status(401).json({ message: 'Profile not found' });
     }
 
     if (profile.active === false) {
+      // Log failed login attempt
+      await supabaseAdmin
+        .from('failed_login_attempts')
+        .insert({
+          email: email || authData.user.email,
+          ip_address: req.ip || req.connection?.remoteAddress,
+          user_agent: req.headers['user-agent'],
+          reason: 'Account deactivated',
+        })
+        .catch(err => console.error('Failed to log login attempt:', err));
+
       return res.status(403).json({ message: 'Account is deactivated' });
     }
 

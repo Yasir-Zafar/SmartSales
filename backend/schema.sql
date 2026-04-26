@@ -58,17 +58,35 @@ CREATE TABLE IF NOT EXISTS ml_forecast_snapshots (
   lstm_daily JSONB NOT NULL,
   seasonal_daily JSONB NOT NULL,
   metrics JSONB,
-  ensemble_total_30d NUMERIC(14,4)
+  ensemble_total_5d NUMERIC(14,4)
 );
+
+-- Migration: rename old column if it exists
+ALTER TABLE ml_forecast_snapshots
+  RENAME COLUMN ensemble_total_30d TO ensemble_total_5d;
 
 CREATE INDEX IF NOT EXISTS idx_ml_forecast_snapshots_batch ON ml_forecast_snapshots(run_batch_id);
 CREATE INDEX IF NOT EXISTS idx_ml_forecast_snapshots_product ON ml_forecast_snapshots(product_name, created_at DESC);
+
+-- Failed login attempts tracking (KAN-24)
+CREATE TABLE IF NOT EXISTS failed_login_attempts (
+  id BIGSERIAL PRIMARY KEY,
+  email TEXT NOT NULL,
+  ip_address TEXT,
+  user_agent TEXT,
+  attempted_at TIMESTAMPTZ DEFAULT NOW(),
+  reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_failed_login_attempts_email ON failed_login_attempts(email, attempted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_failed_login_attempts_time ON failed_login_attempts(attempted_at DESC);
 
 -- Enable Row Level Security
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE csv_uploads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ml_forecast_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE failed_login_attempts ENABLE ROW LEVEL SECURITY;
 
 -- Drop existing policies if they exist
 DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
@@ -108,5 +126,10 @@ CREATE POLICY "Service role has full access csv uploads"
 
 CREATE POLICY "Service role has full access ml forecasts"
   ON ml_forecast_snapshots
+  USING (auth.jwt()->>'role' = 'service_role')
+  WITH CHECK (auth.jwt()->>'role' = 'service_role');
+
+CREATE POLICY "Service role has full access failed logins"
+  ON failed_login_attempts
   USING (auth.jwt()->>'role' = 'service_role')
   WITH CHECK (auth.jwt()->>'role' = 'service_role');
