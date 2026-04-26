@@ -27,35 +27,55 @@ async function mlGet(path, query = {}) {
   return data;
 }
 
+async function computeAbnormalDropAlerts({ product = null, severity = null, minDropPct = null }) {
+  const meta = await loadMeta();
+
+  if (product) {
+    const fc = await mlGet(`/forecast/${encodeURIComponent(product)}`);
+    const meanDaily = getHistoricalMeanDaily(meta, fc.product);
+    const alert = abnormalDropAlert({
+      product: fc.product,
+      ensemble_total_5d: fc?.models?.ensemble?.total,
+      mean_daily: meanDaily,
+    });
+    if (!alert) return [];
+    if (severity && alert.severity !== severity) return [];
+    if (minDropPct != null && Number(alert.drop_pct) < Number(minDropPct)) return [];
+    return [alert];
+  }
+
+  const rows = await mlGet('/forecasts', { limit: 200, sort_by: 'product' });
+  const alerts = [];
+  for (const r of rows?.forecasts || []) {
+    const meanDaily = getHistoricalMeanDaily(meta, r.product);
+    const alert = abnormalDropAlert({
+      product: r.product,
+      ensemble_total_5d: r.ensemble_total_5d,
+      mean_daily: meanDaily,
+    });
+    if (alert) alerts.push(alert);
+  }
+
+  let filtered = alerts;
+  if (severity) {
+    filtered = filtered.filter((a) => a.severity === severity);
+  }
+  if (minDropPct != null) {
+    filtered = filtered.filter((a) => Number(a.drop_pct) >= Number(minDropPct));
+  }
+
+  filtered.sort((a, b) => (a.severity === 'high' ? -1 : 1) - (b.severity === 'high' ? -1 : 1));
+  return filtered;
+}
+
 export async function ownerAbnormalDrops(req, res) {
   try {
-    const meta = await loadMeta();
     const product = req.query.product ? String(req.query.product) : null;
-
-    if (product) {
-      const fc = await mlGet(`/forecast/${encodeURIComponent(product)}`);
-      const meanDaily = getHistoricalMeanDaily(meta, fc.product);
-      const alert = abnormalDropAlert({
-        product: fc.product,
-        ensemble_total_5d: fc?.models?.ensemble?.total,
-        mean_daily: meanDaily,
-      });
-      return res.json({ alerts: alert ? [alert] : [] });
-    }
-
-    const rows = await mlGet('/forecasts', { limit: 200, sort_by: 'product' });
-    const alerts = [];
-    for (const r of rows?.forecasts || []) {
-      const meanDaily = getHistoricalMeanDaily(meta, r.product);
-      const alert = abnormalDropAlert({
-        product: r.product,
-        ensemble_total_5d: r.ensemble_total_5d,
-        mean_daily: meanDaily,
-      });
-      if (alert) alerts.push(alert);
-    }
-
-    alerts.sort((a, b) => (a.severity === 'high' ? -1 : 1) - (b.severity === 'high' ? -1 : 1));
+    const alerts = await computeAbnormalDropAlerts({
+      product,
+      severity: req.query.severity ? String(req.query.severity) : null,
+      minDropPct: req.query.min_drop_pct,
+    });
     return res.json({ count: alerts.length, alerts });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.message });
@@ -176,6 +196,19 @@ export async function ownerLatestForecasts(req, res) {
   }
 }
 
+export async function ownerForecasts(req, res) {
+  try {
+    const data = await mlGet('/forecasts', {
+      limit: req.query.limit || 50,
+      sort_by: req.query.sort_by || 'ensemble_total',
+      category: req.query.category,
+    });
+    return res.json(data);
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
+  }
+}
+
 export async function analystSegments(req, res) {
   try {
     const data = await mlGet('/segments');
@@ -280,11 +313,12 @@ export async function analystForecasts(req, res) {
 
 export async function analystAbnormalDrops(req, res) {
   try {
-    const data = await mlGet('/alerts/abnormal-drops', {
-      severity: req.query.severity,
-      min_drop_pct: req.query.min_drop_pct,
+    const alerts = await computeAbnormalDropAlerts({
+      product: req.query.product ? String(req.query.product) : null,
+      severity: req.query.severity ? String(req.query.severity) : null,
+      minDropPct: req.query.min_drop_pct,
     });
-    return res.json(data);
+    return res.json({ count: alerts.length, alerts });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.message });
   }

@@ -27,14 +27,6 @@ export const AnalystDashboard = () => {
   const [fcError, setFcError] = useState('');
   const [forecastData, setForecastData] = useState(null);
 
-  const [allForecasts, setAllForecasts] = useState([]);
-  const [forecastsLoading, setForecastsLoading] = useState(false);
-  const [forecastsError, setForecastsError] = useState('');
-
-  const [abnormalDrops, setAbnormalDrops] = useState([]);
-  const [dropsLoading, setDropsLoading] = useState(false);
-  const [dropsError, setDropsError] = useState('');
-
   useEffect(() => {
     const fetchTopProducts = async () => {
       setLoadingChart(true);
@@ -82,45 +74,6 @@ export const AnalystDashboard = () => {
       }
     };
     loadSeg();
-  }, []);
-
-  useEffect(() => {
-    const loadForecasts = async () => {
-      setForecastsLoading(true);
-      setForecastsError('');
-      try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get(`${API_URL}/insights/analyst/forecasts`, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { limit: 20, sort_by: 'ensemble_total' },
-        });
-        setAllForecasts(res.data?.forecasts || []);
-      } catch (e) {
-        setForecastsError(e.response?.data?.message || 'Could not load forecasts');
-      } finally {
-        setForecastsLoading(false);
-      }
-    };
-    loadForecasts();
-  }, []);
-
-  useEffect(() => {
-    const loadDrops = async () => {
-      setDropsLoading(true);
-      setDropsError('');
-      try {
-        const token = localStorage.getItem('token');
-        const res = await axios.get(`${API_URL}/insights/analyst/abnormal-drops`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setAbnormalDrops(res.data?.alerts || []);
-      } catch (e) {
-        setDropsError(e.response?.data?.message || 'Could not load abnormal drop alerts');
-      } finally {
-        setDropsLoading(false);
-      }
-    };
-    loadDrops();
   }, []);
 
   const maxQty = topProducts.length ? Math.max(...topProducts.map((p) => p.qty)) : 0;
@@ -245,92 +198,6 @@ export const AnalystDashboard = () => {
             <h4 className="text-sm font-medium text-gray-400 uppercase">Forecast Accuracy</h4>
             <p className="text-3xl font-bold text-purple-500 mt-2">94.2%</p>
             <p className="text-xs text-gray-500 mt-1">Last 7 days</p>
-          </div>
-        </div>
-
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Abnormal Drop Alerts */}
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Abnormal Drop Alerts</h3>
-            {dropsLoading ? (
-              <p className="text-gray-400 text-sm">Loading drop alerts…</p>
-            ) : dropsError ? (
-              <p className="text-red-400 text-sm">{dropsError}</p>
-            ) : abnormalDrops.length === 0 ? (
-              <p className="text-gray-400 text-sm">No abnormal drops detected</p>
-            ) : (
-              <div className="max-h-96 overflow-y-auto space-y-3">
-                {abnormalDrops.map((drop, idx) => (
-                  <div
-                    key={idx}
-                    className={`border rounded-lg p-3 ${
-                      drop.severity === 'high'
-                        ? 'border-red-500 bg-red-900/20'
-                        : drop.severity === 'medium'
-                        ? 'border-yellow-500 bg-yellow-900/20'
-                        : 'border-blue-500 bg-blue-900/20'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="text-gray-100 font-medium text-sm">{drop.product}</p>
-                        <p className="text-xs text-gray-400">{drop.category}</p>
-                      </div>
-                      <span className={`text-xs font-bold px-2 py-1 rounded ${
-                        drop.severity === 'high'
-                          ? 'bg-red-500 text-white'
-                          : drop.severity === 'medium'
-                          ? 'bg-yellow-500 text-gray-900'
-                          : 'bg-blue-500 text-white'
-                      }`}>
-                        {drop.severity.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-xs text-gray-300 space-y-1">
-                      <p>Forecast (5d): <span className="text-teal-400 font-semibold">{drop.ensemble_total_5d}</span></p>
-                      <p>Baseline (5d): <span className="text-purple-400 font-semibold">{drop.baseline_total_5d}</span></p>
-                      <p className="text-red-400 font-bold">Drop: {drop.drop_pct}%</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 5-Day Sales Forecast */}
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">5-Day Sales Forecast</h3>
-            <p className="text-xs text-gray-500 mb-3">Top 20 products by forecasted sales volume</p>
-            {forecastsLoading ? (
-              <p className="text-gray-400 text-sm">Loading forecasts…</p>
-            ) : forecastsError ? (
-              <p className="text-red-400 text-sm">{forecastsError}</p>
-            ) : allForecasts.length === 0 ? (
-              <p className="text-gray-400 text-sm">No forecast data available. Upload sales data first.</p>
-            ) : (
-              <div className="max-h-96 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-gray-800 border-b border-gray-700">
-                    <tr className="text-left text-gray-400 text-xs">
-                      <th className="pb-2 pr-2">Product</th>
-                      <th className="pb-2 px-2">Category</th>
-                      <th className="pb-2 pl-2 text-right">5d Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-gray-300">
-                    {allForecasts.map((fc, idx) => (
-                      <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                        <td className="py-2 pr-2">{fc.product}</td>
-                        <td className="py-2 px-2 text-xs text-gray-400">{fc.category}</td>
-                        <td className="py-2 pl-2 text-right">
-                          <span className="text-teal-400 font-semibold">{fc.ensemble_total_5d}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         </div>
 

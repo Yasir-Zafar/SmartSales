@@ -3,6 +3,7 @@ import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 import {
   ownerAbnormalDrops,
   ownerLatestForecasts,
+  ownerForecasts,
   analystForecast,
   analystForecastSnapshots,
   analystSegments,
@@ -20,6 +21,7 @@ router.get('/owner/alerts/abnormal-drops', authenticateToken, authorizeRoles('OW
 
 // Owner: latest persisted forecast batch (for charts / planning)
 router.get('/owner/forecasts/latest', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerLatestForecasts);
+router.get('/owner/forecasts', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerForecasts);
 
 // Analyst: full forecast payload + metrics + derived trust/trend
 router.get('/analyst/forecast/:product', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystForecast);

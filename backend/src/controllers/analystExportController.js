@@ -78,6 +78,20 @@ export async function exportTrainingCsv(req, res) {
   }
 }
 
+function isInternalMlCaller(req) {
+  const expected = process.env.ML_INTERNAL_API_KEY;
+  if (!expected) return false;
+  const provided = req.headers['x-ml-internal-key'];
+  return typeof provided === 'string' && provided === expected;
+}
+
+export async function exportTrainingCsvInternal(req, res) {
+  if (!isInternalMlCaller(req)) {
+    return res.status(403).json({ message: 'Forbidden: invalid internal key' });
+  }
+  return exportTrainingCsv(req, res);
+}
+
 export async function retrainReloadMl(req, res) {
   try {
     const startDate = req.body?.startDate || req.body?.start;

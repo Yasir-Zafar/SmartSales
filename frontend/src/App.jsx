@@ -13,6 +13,10 @@ import { AdminViewUsers } from './pages/AdminViewUsers';
 import { SalesRecords } from './pages/SalesRecords';
 import { CompareTimePeriods } from './pages/CompareTimePeriods';
 import { OwnerSalesSummary } from './pages/OwnerSalesSummary';
+import { OwnerAlerts } from './pages/OwnerAlerts';
+import { OwnerFiveDayForecast } from './pages/OwnerFiveDayForecast';
+import { AnalystAbnormalDrops } from './pages/AnalystAbnormalDrops';
+import { StaffOperations } from './pages/StaffOperations';
 
 // --- MAIN APP ---
 function App() {
@@ -66,9 +70,29 @@ function App() {
               <OwnerSalesSummary />
             </ProtectedRoute>
           } />
+          <Route path="/owner/alerts" element={
+            <ProtectedRoute roles={['OWNER']}>
+              <OwnerAlerts />
+            </ProtectedRoute>
+          } />
+          <Route path="/owner/forecasts" element={
+            <ProtectedRoute roles={['OWNER']}>
+              <OwnerFiveDayForecast />
+            </ProtectedRoute>
+          } />
           <Route path="/compare-periods" element={
             <ProtectedRoute roles={['ANALYST']}>
               <CompareTimePeriods />
+            </ProtectedRoute>
+          } />
+          <Route path="/analyst/abnormal-drops" element={
+            <ProtectedRoute roles={['ANALYST']}>
+              <AnalystAbnormalDrops />
+            </ProtectedRoute>
+          } />
+          <Route path="/staff/operations" element={
+            <ProtectedRoute roles={['STAFF']}>
+              <StaffOperations />
             </ProtectedRoute>
           } />
           <Route path="/" element={<Navigate to="/login" />} />

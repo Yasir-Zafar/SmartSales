@@ -155,6 +155,7 @@ def _load_artifacts():
 async def _auto_load_data_from_backend():
     """Automatically load training data from backend on startup."""
     backend_url = os.environ.get("BACKEND_URL", "http://localhost:5000")
+    internal_key = os.environ.get("ML_INTERNAL_API_KEY", "")
     # Fixed date range: 2023-01-01 to today
     from datetime import date
     start_date = "2023-01-01"
@@ -162,29 +163,44 @@ async def _auto_load_data_from_backend():
 
     try:
         import httpx
-        url = f"{backend_url.rstrip('/')}/api/analyst/training-export?startDate={start_date}&endDate={end_date}"
+        url = f"{backend_url.rstrip('/')}/api/analyst/training-export/internal?startDate={start_date}&endDate={end_date}"
         print(f"[SmartSales] Fetching training data from {start_date} to {end_date}...")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url)
-
-        if response.status_code == 200:
-            csv_content = response.text
-            _load_data(io.StringIO(csv_content))
-
-            # Persist forecasts to database if configured
-            snap_rows = build_forecast_rows_from_state(S, SEQ_LEN, FORECAST_HORIZON)
-            run_batch_id = persist_forecast_snapshots(snap_rows)
-
-            print(f"[SmartSales] ✅ Auto-loaded {len(S.df):,} rows from backend")
-            print(f"[SmartSales] Ready — {len(S.ensembles)} models | "
-                  f"{S.df['customer_id'].nunique():,} customers")
-            if run_batch_id:
-                print(f"[SmartSales] Forecast batch persisted: {run_batch_id}")
-            return True
+        headers = {}
+        if internal_key:
+            headers["x-ml-internal-key"] = internal_key
         else:
-            print(f"[SmartSales] ⚠️  Backend returned {response.status_code}, using local CSV fallback")
-            return False
+            print("[SmartSales] ⚠️  ML_INTERNAL_API_KEY not set; backend internal export may reject startup sync")
+
+        for attempt in range(1, 6):
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, headers=headers)
+
+            if response.status_code == 200:
+                csv_content = response.text
+                _load_data(io.StringIO(csv_content))
+
+                # Persist forecasts to database if configured
+                snap_rows = build_forecast_rows_from_state(S, SEQ_LEN, FORECAST_HORIZON)
+                run_batch_id = persist_forecast_snapshots(snap_rows)
+
+                print(f"[SmartSales] ✅ Auto-loaded {len(S.df):,} rows from backend")
+                print(f"[SmartSales] Ready — {len(S.ensembles)} models | "
+                      f"{S.df['customer_id'].nunique():,} customers")
+                if run_batch_id:
+                    print(f"[SmartSales] Forecast batch persisted: {run_batch_id}")
+                return True
+
+            if response.status_code in (401, 403):
+                print(f"[SmartSales] ⚠️  Backend auth rejected startup sync ({response.status_code}). Check ML_INTERNAL_API_KEY.")
+                return False
+
+            print(f"[SmartSales] Startup sync attempt {attempt}/5 failed with {response.status_code}; retrying...")
+            import asyncio
+            await asyncio.sleep(2)
+
+        print("[SmartSales] ⚠️  Backend startup sync failed after retries, using local CSV fallback")
+        return False
     except Exception as e:
         print(f"[SmartSales] ⚠️  Could not fetch from backend: {e}")
         print(f"[SmartSales] Falling back to local CSV if available")
