@@ -44,3 +44,5 @@ backend/node_modules/
 frontend/node_modules/
 ml/artifacts.zip
 ml/artifacts/
+backend/data/alert-thresholds.json
+backend/data/alert-history.json

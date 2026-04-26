@@ -9,6 +9,11 @@ import {
   analystSegments,
   analystForecasts,
   analystAbnormalDrops,
+  getAbnormalDropThresholds,
+  updateAbnormalDropThreshold,
+  removeAbnormalDropThreshold,
+  sharedDropAlertNotifications,
+  abnormalDropAlertHistory,
   staffInventoryRisk,
   staffCustomerUpsell,
   staffSalesSummary,
@@ -18,6 +23,9 @@ const router = express.Router();
 
 // Owner: high-level alerting only
 router.get('/owner/alerts/abnormal-drops', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerAbnormalDrops);
+router.get('/owner/alerts/abnormal-drops/thresholds', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), getAbnormalDropThresholds);
+router.put('/owner/alerts/abnormal-drops/thresholds/:level', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), updateAbnormalDropThreshold);
+router.delete('/owner/alerts/abnormal-drops/thresholds/:level', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), removeAbnormalDropThreshold);
 
 // Owner: latest persisted forecast batch (for charts / planning)
 router.get('/owner/forecasts/latest', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerLatestForecasts);
@@ -37,6 +45,8 @@ router.get('/analyst/forecasts', authenticateToken, authorizeRoles('ANALYST', 'A
 
 // Analyst: abnormal drop alerts (for dashboard display)
 router.get('/analyst/abnormal-drops', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystAbnormalDrops);
+router.get('/alerts/notifications/abnormal-drops', authenticateToken, authorizeRoles('ANALYST', 'OWNER', 'ADMIN'), sharedDropAlertNotifications);
+router.get('/alerts/history/abnormal-drops', authenticateToken, authorizeRoles('ANALYST', 'OWNER', 'ADMIN'), abnormalDropAlertHistory);
 
 // Staff: simplified inventory risk guidance
 router.get('/staff/inventory/risk', authenticateToken, authorizeRoles('STAFF', 'ADMIN'), staffInventoryRisk);

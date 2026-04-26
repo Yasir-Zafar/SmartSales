@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../config/db.js';
 import { getMlBaseUrl, loadMeta, getHistoricalMeanDaily, abnormalDropAlert, confidenceRating, trendDriverFromForecast, staffActionFromInventoryRiskRow, upsellMessageFromTopProducts } from '../utils/mlInsights.js';
+import { appendAlertHistory, classifyAlertSeverity, deleteAlertThreshold, getAlertHistory, getAlertThresholds, setAlertThreshold } from '../utils/alertingStore.js';
 
 async function mlGet(path, query = {}) {
   const base = getMlBaseUrl().replace(/\/+$/, '');
@@ -27,8 +28,9 @@ async function mlGet(path, query = {}) {
   return data;
 }
 
-async function computeAbnormalDropAlerts({ product = null, severity = null, minDropPct = null }) {
+async function computeAbnormalDropAlerts({ product = null, severity = null, minDropPct = null, recordHistory = false }) {
   const meta = await loadMeta();
+  const thresholds = await getAlertThresholds();
 
   if (product) {
     const fc = await mlGet(`/forecast/${encodeURIComponent(product)}`);
@@ -39,6 +41,9 @@ async function computeAbnormalDropAlerts({ product = null, severity = null, minD
       mean_daily: meanDaily,
     });
     if (!alert) return [];
+    const classifiedSeverity = classifyAlertSeverity(alert.drop_pct, thresholds);
+    if (!classifiedSeverity) return [];
+    alert.severity = classifiedSeverity;
     if (severity && alert.severity !== severity) return [];
     if (minDropPct != null && Number(alert.drop_pct) < Number(minDropPct)) return [];
     return [alert];
@@ -53,7 +58,10 @@ async function computeAbnormalDropAlerts({ product = null, severity = null, minD
       ensemble_total_5d: r.ensemble_total_5d,
       mean_daily: meanDaily,
     });
-    if (alert) alerts.push(alert);
+    if (!alert) continue;
+    const classifiedSeverity = classifyAlertSeverity(alert.drop_pct, thresholds);
+    if (!classifiedSeverity) continue;
+    alerts.push({ ...alert, severity: classifiedSeverity });
   }
 
   let filtered = alerts;
@@ -64,8 +72,72 @@ async function computeAbnormalDropAlerts({ product = null, severity = null, minD
     filtered = filtered.filter((a) => Number(a.drop_pct) >= Number(minDropPct));
   }
 
-  filtered.sort((a, b) => (a.severity === 'high' ? -1 : 1) - (b.severity === 'high' ? -1 : 1));
+  const rank = { high: 3, medium: 2, low: 1 };
+  filtered.sort((a, b) => (rank[b.severity] || 0) - (rank[a.severity] || 0) || Number(b.drop_pct) - Number(a.drop_pct));
+
+  if (recordHistory) {
+    await appendAlertHistory(
+      filtered.map((alert) => ({
+        type: alert.type,
+        product: alert.product,
+        severity: alert.severity,
+        drop_pct: alert.drop_pct,
+        baseline_total_5d: alert.baseline_total_5d,
+        ensemble_total_5d: alert.ensemble_total_5d,
+      }))
+    );
+  }
   return filtered;
+}
+
+export async function getAbnormalDropThresholds(req, res) {
+  try {
+    const thresholds = await getAlertThresholds();
+    return res.json({ thresholds });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+export async function updateAbnormalDropThreshold(req, res) {
+  try {
+    const level = String(req.params.level || '').trim().toLowerCase();
+    const thresholdPct = req.body?.threshold_pct;
+    const thresholds = await setAlertThreshold(level, thresholdPct);
+    return res.json({ thresholds });
+  } catch (err) {
+    const status = /invalid/i.test(err.message) ? 400 : 500;
+    return res.status(status).json({ message: err.message });
+  }
+}
+
+export async function removeAbnormalDropThreshold(req, res) {
+  try {
+    const level = String(req.params.level || '').trim().toLowerCase();
+    const thresholds = await deleteAlertThreshold(level);
+    return res.json({ thresholds });
+  } catch (err) {
+    const status = /invalid/i.test(err.message) ? 400 : 500;
+    return res.status(status).json({ message: err.message });
+  }
+}
+
+export async function sharedDropAlertNotifications(req, res) {
+  try {
+    const alerts = await computeAbnormalDropAlerts({ recordHistory: true });
+    return res.json({ count: alerts.length, alerts });
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
+  }
+}
+
+export async function abnormalDropAlertHistory(req, res) {
+  try {
+    const history = await getAlertHistory(req.query.limit);
+    return res.json({ count: history.length, history });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
 }
 
 export async function ownerAbnormalDrops(req, res) {
