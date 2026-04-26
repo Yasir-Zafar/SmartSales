@@ -62,18 +62,18 @@ export function abnormalDropAlert({ product, ensemble_total_5d, mean_daily }) {
   if (baseline5d <= 0) return null;
 
   const ratio = ensemble_total_5d / baseline5d;
-  if (ratio < 0.7) {
-    return {
-      type: 'ABNORMAL_DROP',
-      title: 'Abnormal Drop',
-      product: normalizeProductKey(product),
-      ensemble_total_5d,
-      baseline_total_5d: Number(baseline5d.toFixed(2)),
-      drop_pct: Number(((1 - ratio) * 100).toFixed(1)),
-      severity: ratio < 0.5 ? 'high' : 'medium',
-    };
-  }
-  return null;
+  const dropPct = Number(((1 - ratio) * 100).toFixed(1));
+  if (dropPct <= 0) return null;
+
+  return {
+    type: 'ABNORMAL_DROP',
+    title: 'Abnormal Drop',
+    product: normalizeProductKey(product),
+    ensemble_total_5d,
+    baseline_total_5d: Number(baseline5d.toFixed(2)),
+    drop_pct: dropPct,
+    severity: ratio < 0.5 ? 'high' : 'medium',
+  };
 }
 
 export function confidenceRating({ mae, rmse, mean_daily }) {
