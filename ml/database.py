@@ -20,7 +20,30 @@ except ImportError:  # pragma: no cover
 
 
 def get_database_url() -> Optional[str]:
-    return os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL")
+    """Build PostgreSQL connection URL from Supabase environment variables."""
+    # First check if DATABASE_URL is directly provided
+    direct_url = os.environ.get("DATABASE_URL")
+    if direct_url:
+        return direct_url
+
+    supabase_url = os.environ.get("SUPABASE_URL")
+    if not supabase_url:
+        return None
+
+    # Extract project reference from Supabase URL
+    # Format: https://PROJECT_REF.supabase.co
+    project_ref = supabase_url.replace("https://", "").replace(".supabase.co", "")
+
+    # Try to get database password from environment
+    db_password = os.environ.get("SUPABASE_DB_PASSWORD")
+    if not db_password:
+        print("[SmartSales] ⚠️  SUPABASE_DB_PASSWORD not set. Skipping database persistence.")
+        print("[SmartSales] Set SUPABASE_DB_PASSWORD to your Supabase project database password.")
+        return None
+
+    # Use direct connection (port 5432) instead of pooler
+    # Format: postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+    return f"postgresql://postgres:{db_password}@db.{project_ref}.supabase.co:5432/postgres"
 
 
 def persist_forecast_snapshots(rows: List[Dict[str, Any]]) -> Optional[str]:
@@ -34,8 +57,8 @@ def persist_forecast_snapshots(rows: List[Dict[str, Any]]) -> Optional[str]:
 
     # Check if database connection is configured
     if not url:
-        print("[SmartSales] ⚠️  DATABASE_URL not configured. Skipping forecast persistence.")
-        print("[SmartSales] Set DATABASE_URL environment variable to enable database persistence.")
+        print("[SmartSales] ⚠️  SUPABASE_URL not configured. Skipping forecast persistence.")
+        print("[SmartSales] Set SUPABASE_URL environment variable to enable database persistence.")
         return None
 
     if not rows:
@@ -89,7 +112,7 @@ def persist_forecast_snapshots(rows: List[Dict[str, Any]]) -> Optional[str]:
         return run_batch_id
     except Exception as e:
         print(f"[SmartSales] ❌ Database error: {type(e).__name__}: {e}")
-        print(f"[SmartSales] Check your DATABASE_URL is correct and database is accessible.")
+        print(f"[SmartSales] Check your SUPABASE_URL is correct and database is accessible.")
         if conn:
             try:
                 conn.close()

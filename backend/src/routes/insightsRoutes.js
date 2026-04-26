@@ -6,6 +6,8 @@ import {
   analystForecast,
   analystForecastSnapshots,
   analystSegments,
+  analystForecasts,
+  analystAbnormalDrops,
   staffInventoryRisk,
   staffCustomerUpsell,
   staffSalesSummary,
@@ -27,6 +29,12 @@ router.get('/analyst/forecast/:product/snapshots', authenticateToken, authorizeR
 
 // Analyst: segment profiles + top products per segment
 router.get('/analyst/segments', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystSegments);
+
+// Analyst: all forecasts (for dashboard display)
+router.get('/analyst/forecasts', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystForecasts);
+
+// Analyst: abnormal drop alerts (for dashboard display)
+router.get('/analyst/abnormal-drops', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystAbnormalDrops);
 
 // Staff: simplified inventory risk guidance
 router.get('/staff/inventory/risk', authenticateToken, authorizeRoles('STAFF', 'ADMIN'), staffInventoryRisk);

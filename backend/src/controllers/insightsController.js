@@ -264,3 +264,28 @@ export async function staffSalesSummary(req, res) {
     return res.status(500).json({ message: err.message });
   }
 }
+
+export async function analystForecasts(req, res) {
+  try {
+    const data = await mlGet('/forecasts', {
+      limit: req.query.limit || 50,
+      sort_by: req.query.sort_by || 'ensemble_total',
+      category: req.query.category,
+    });
+    return res.json(data);
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
+  }
+}
+
+export async function analystAbnormalDrops(req, res) {
+  try {
+    const data = await mlGet('/alerts/abnormal-drops', {
+      severity: req.query.severity,
+      min_drop_pct: req.query.min_drop_pct,
+    });
+    return res.json(data);
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
+  }
+}

@@ -222,17 +222,69 @@ export const OwnerDashboard = () => {
           </div>
         </div>
 
-        {/* Alerts */}
-        {alerts.length > 0 && (
-          <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Abnormal Drop Alerts</h3>
-            <ul className="space-y-2">
-              {alerts.map((a, i) => (
-                <li key={i} className="text-sm text-red-400">{JSON.stringify(a)}</li>
+        {/* Abnormal Drop Alerts */}
+        <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
+          <h3 className="text-lg font-semibold text-gray-50 mb-4">Abnormal Drop Alerts</h3>
+          {loading ? (
+            <p className="text-gray-400 text-sm">Loading alerts…</p>
+          ) : error ? (
+            <p className="text-red-400 text-sm">{error}</p>
+          ) : alerts.length === 0 ? (
+            <p className="text-gray-400 text-sm">No abnormal drops detected</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {alerts.slice(0, 9).map((alert, idx) => (
+                <div
+                  key={idx}
+                  className={`border rounded-lg p-4 ${
+                    alert.severity === 'high'
+                      ? 'border-red-500 bg-red-900/20'
+                      : alert.severity === 'medium'
+                      ? 'border-yellow-500 bg-yellow-900/20'
+                      : 'border-blue-500 bg-blue-900/20'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-gray-100 font-medium text-sm truncate" title={alert.product}>
+                        {alert.product}
+                      </p>
+                      <p className="text-xs text-gray-400 capitalize">{alert.category || 'N/A'}</p>
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded flex-shrink-0 ml-2 ${
+                      alert.severity === 'high'
+                        ? 'bg-red-500 text-white'
+                        : alert.severity === 'medium'
+                        ? 'bg-yellow-500 text-gray-900'
+                        : 'bg-blue-500 text-white'
+                    }`}>
+                      {alert.severity?.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-1 text-xs text-gray-300">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Forecast (5d):</span>
+                      <span className="text-teal-400 font-semibold">{alert.ensemble_total_5d}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Baseline (5d):</span>
+                      <span className="text-purple-400 font-semibold">{alert.baseline_total_5d}</span>
+                    </div>
+                    <div className="flex justify-between pt-1 border-t border-gray-700">
+                      <span className="text-gray-500">Drop:</span>
+                      <span className="text-red-400 font-bold">{alert.drop_pct}%</span>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </ul>
-          </div>
-        )}
+            </div>
+          )}
+          {alerts.length > 9 && (
+            <p className="text-xs text-gray-500 mt-4 text-center">
+              Showing 9 of {alerts.length} alerts
+            </p>
+          )}
+        </div>
 
         {/* Forecast Chart */}
         <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
