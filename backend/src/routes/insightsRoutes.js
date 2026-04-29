@@ -14,6 +14,7 @@ import {
   removeAbnormalDropThreshold,
   sharedDropAlertNotifications,
   abnormalDropAlertHistory,
+  droppedStatus,
   staffInventoryRisk,
   staffCustomerUpsell,
   staffSalesSummary,
@@ -47,6 +48,7 @@ router.get('/analyst/forecasts', authenticateToken, authorizeRoles('ANALYST', 'A
 router.get('/analyst/abnormal-drops', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystAbnormalDrops);
 router.get('/alerts/notifications/abnormal-drops', authenticateToken, authorizeRoles('ANALYST', 'OWNER', 'ADMIN'), sharedDropAlertNotifications);
 router.get('/alerts/history/abnormal-drops', authenticateToken, authorizeRoles('ANALYST', 'OWNER', 'ADMIN'), abnormalDropAlertHistory);
+router.get('/alerts/dropped-status', authenticateToken, authorizeRoles('ANALYST', 'OWNER', 'ADMIN'), droppedStatus);
 
 // Staff: simplified inventory risk guidance
 router.get('/staff/inventory/risk', authenticateToken, authorizeRoles('STAFF', 'ADMIN'), staffInventoryRisk);

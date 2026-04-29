@@ -19,7 +19,12 @@ async function mlGet(path, query = {}) {
     data = { message: text };
   }
   if (!res.ok) {
-    const msg = data?.detail || data?.message || `ML request failed (${res.status})`;
+    const rawMsg = data?.detail ?? data?.message;
+    const msg = typeof rawMsg === 'string'
+      ? rawMsg
+      : rawMsg != null
+        ? JSON.stringify(rawMsg)
+        : `ML request failed (${res.status})`;
     const err = new Error(msg);
     err.status = res.status;
     err.payload = data;
@@ -90,6 +95,26 @@ async function computeAbnormalDropAlerts({ product = null, severity = null, minD
   return filtered;
 }
 
+function buildDropStatusRow({ product, ensembleTotal5d, meanDaily, thresholds }) {
+  if (typeof ensembleTotal5d !== 'number' || !Number.isFinite(ensembleTotal5d)) return null;
+  if (typeof meanDaily !== 'number' || !Number.isFinite(meanDaily)) return null;
+
+  const baseline5dRaw = meanDaily * 5;
+  if (!Number.isFinite(baseline5dRaw) || baseline5dRaw <= 0) return null;
+
+  const dropPctRaw = ((baseline5dRaw - ensembleTotal5d) / baseline5dRaw) * 100;
+  const dropPct = Math.max(0, Number(dropPctRaw.toFixed(1)));
+  const severity = classifyAlertSeverity(dropPct, thresholds) || 'none';
+
+  return {
+    product: String(product || '').trim().toLowerCase(),
+    baseline_total_5d: Number(baseline5dRaw.toFixed(2)),
+    ensemble_total_5d: Number(ensembleTotal5d.toFixed(2)),
+    drop_pct: dropPct,
+    severity,
+  };
+}
+
 export async function getAbnormalDropThresholds(req, res) {
   try {
     const thresholds = await getAlertThresholds();
@@ -137,6 +162,34 @@ export async function abnormalDropAlertHistory(req, res) {
     return res.json({ count: history.length, history });
   } catch (err) {
     return res.status(500).json({ message: err.message });
+  }
+}
+
+export async function droppedStatus(req, res) {
+  try {
+    const queryProduct = String(req.query.product || '').trim().toLowerCase();
+    const meta = await loadMeta();
+    const thresholds = await getAlertThresholds();
+    const rows = await mlGet('/forecasts', { limit: 200, sort_by: 'product' });
+
+    const statuses = (rows?.forecasts || [])
+      .map((r) => {
+        const product = String(r?.product || '').trim().toLowerCase();
+        if (!product) return null;
+        const meanDaily = getHistoricalMeanDaily(meta, product);
+        return buildDropStatusRow({
+          product,
+          ensembleTotal5d: r?.ensemble_total_5d,
+          meanDaily,
+          thresholds,
+        });
+      })
+      .filter((row) => row && (!queryProduct || row.product.includes(queryProduct)))
+      .sort((a, b) => Number(b.drop_pct) - Number(a.drop_pct));
+
+    return res.json({ count: statuses.length, statuses });
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
   }
 }
 
