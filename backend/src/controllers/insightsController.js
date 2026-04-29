@@ -1,6 +1,8 @@
-import { supabaseAdmin } from '../config/db.js';
 import { getMlBaseUrl, loadMeta, getHistoricalMeanDaily, abnormalDropAlert, confidenceRating, trendDriverFromForecast, staffActionFromInventoryRiskRow, upsellMessageFromTopProducts } from '../utils/mlInsights.js';
-import { appendAlertHistory, classifyAlertSeverity, deleteAlertThreshold, getAlertHistory, getAlertThresholds, setAlertThreshold } from '../utils/alertingStore.js';
+import { appendAlertHistory, classifyAlertSeverity, getAlertHistory, getAlertThresholds, getLastAlertCount, resetAlertThreshold, setAlertThreshold, setLastAlertCount } from '../utils/alertingStore.js';
+import { sendOwnerAnomalyCountChangeEmail } from '../utils/ownerAlertMailer.js';
+
+const TEST_ALERT_RECIPIENTS = ['dpix720@gmail.com', 'l233029@lhr.nu.edu.pk'];
 
 async function mlGet(path, query = {}) {
   const base = getMlBaseUrl().replace(/\/+$/, '');
@@ -126,9 +128,8 @@ export async function getAbnormalDropThresholds(req, res) {
 
 export async function updateAbnormalDropThreshold(req, res) {
   try {
-    const level = String(req.params.level || '').trim().toLowerCase();
     const thresholdPct = req.body?.threshold_pct;
-    const thresholds = await setAlertThreshold(level, thresholdPct);
+    const thresholds = await setAlertThreshold(thresholdPct);
     return res.json({ thresholds });
   } catch (err) {
     const status = /invalid/i.test(err.message) ? 400 : 500;
@@ -138,8 +139,7 @@ export async function updateAbnormalDropThreshold(req, res) {
 
 export async function removeAbnormalDropThreshold(req, res) {
   try {
-    const level = String(req.params.level || '').trim().toLowerCase();
-    const thresholds = await deleteAlertThreshold(level);
+    const thresholds = await resetAlertThreshold();
     return res.json({ thresholds });
   } catch (err) {
     const status = /invalid/i.test(err.message) ? 400 : 500;
@@ -150,7 +150,44 @@ export async function removeAbnormalDropThreshold(req, res) {
 export async function sharedDropAlertNotifications(req, res) {
   try {
     const alerts = await computeAbnormalDropAlerts({ recordHistory: true });
-    return res.json({ count: alerts.length, alerts });
+    const count = alerts.length;
+    const previous = await getLastAlertCount();
+    const previousCount = previous.count;
+    let emailSent = false;
+    let emailError = null;
+    const notifyOwner = String(req.query.notify_owner || '').toLowerCase() === 'true';
+
+    const changed = Number.isFinite(previousCount) && previousCount !== count;
+    if (changed && notifyOwner) {
+      console.log(`[alerts] anomaly count changed: ${previousCount} -> ${count}. Preparing owner email notifications.`);
+      try {
+        for (const to of TEST_ALERT_RECIPIENTS) {
+          console.log(`[alerts] anomaly changed, sending email to: ${to}`);
+          try {
+            await sendOwnerAnomalyCountChangeEmail({
+              to,
+              previousCount,
+              currentCount: count,
+            });
+            emailSent = true;
+            console.log(`[alerts] email send success: ${to}`);
+          } catch (sendErr) {
+            console.error(`[alerts] email send failed: ${to} | ${sendErr.message}`);
+            throw sendErr;
+          }
+        }
+      } catch (mailErr) {
+        emailError = mailErr.message;
+        console.error(`[alerts] owner notification flow failed: ${mailErr.message}`);
+      }
+    } else if (changed && !notifyOwner) {
+      console.log(`[alerts] anomaly count changed: ${previousCount} -> ${count}. Email suppressed (notify_owner=false).`);
+    } else if (notifyOwner) {
+      console.log(`[alerts] anomaly count unchanged (${count}). No owner email sent.`);
+    }
+
+    await setLastAlertCount(count);
+    return res.json({ count, previous_count: previousCount, changed, email_sent: emailSent, email_error: emailError, alerts });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.message });
   }
@@ -329,6 +366,63 @@ export async function ownerForecasts(req, res) {
       category: req.query.category,
     });
     return res.json(data);
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
+  }
+}
+
+export async function ownerCustomerSegments(req, res) {
+  try {
+    const queryCustomerId = req.query.customer_id != null
+      ? Number(req.query.customer_id)
+      : null;
+
+    if (req.query.customer_id != null && !Number.isFinite(queryCustomerId)) {
+      return res.status(400).json({ message: 'Invalid customer_id' });
+    }
+
+    const customerIds = [];
+
+    if (queryCustomerId != null) {
+      customerIds.push(queryCustomerId);
+    } else {
+      const { data: rows, error } = await supabaseAdmin
+        .from('daily_sales')
+        .select('customer_id')
+        .order('customer_id', { ascending: true });
+
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      const unique = new Set();
+      for (const row of rows || []) {
+        const id = Number(row?.customer_id);
+        if (Number.isFinite(id)) unique.add(id);
+      }
+      customerIds.push(...Array.from(unique).sort((a, b) => a - b));
+    }
+
+    const segments = [];
+    for (const customerId of customerIds) {
+      try {
+        const seg = await mlGet(`/segments/${customerId}`);
+        segments.push({
+          customer_id: seg.customer_id,
+          segment_id: seg.segment_id,
+          segment_label: seg.segment_label,
+          recommendation: seg.recommendation,
+          total_purchases: seg.total_purchases,
+          total_spend: seg.total_spend,
+        });
+      } catch (err) {
+        if (queryCustomerId != null) {
+          return res.status(err.status || 500).json({ message: err.message });
+        }
+      }
+    }
+
+    return res.json({ count: segments.length, segments });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.message });
   }

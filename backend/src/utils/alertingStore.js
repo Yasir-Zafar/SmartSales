@@ -6,12 +6,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(__dirname, '..', '..', 'data');
 const thresholdsFile = path.join(dataDir, 'alert-thresholds.json');
 const historyFile = path.join(dataDir, 'alert-history.json');
+const countStateFile = path.join(dataDir, 'alert-count-state.json');
 
-const DEFAULT_THRESHOLDS = {
-  low: 10,
-  medium: 20,
-  high: 35,
-};
+const DEFAULT_THRESHOLD = 20;
 
 async function ensureDir() {
   await fs.mkdir(dataDir, { recursive: true });
@@ -39,64 +36,37 @@ function normalizeThresholdNumber(value) {
 }
 
 export async function getAlertThresholds() {
-  const saved = await readJson(thresholdsFile, DEFAULT_THRESHOLDS);
-  const hasLow = Object.prototype.hasOwnProperty.call(saved || {}, 'low');
-  const hasMedium = Object.prototype.hasOwnProperty.call(saved || {}, 'medium');
-  const hasHigh = Object.prototype.hasOwnProperty.call(saved || {}, 'high');
-
-  const low = hasLow ? (saved?.low == null ? null : normalizeThresholdNumber(saved?.low)) : DEFAULT_THRESHOLDS.low;
-  const medium = hasMedium ? (saved?.medium == null ? null : normalizeThresholdNumber(saved?.medium)) : DEFAULT_THRESHOLDS.medium;
-  const high = hasHigh ? (saved?.high == null ? null : normalizeThresholdNumber(saved?.high)) : DEFAULT_THRESHOLDS.high;
-
+  const saved = await readJson(thresholdsFile, { threshold_pct: DEFAULT_THRESHOLD });
+  const normalized = normalizeThresholdNumber(saved?.threshold_pct);
   return {
-    low: low == null ? null : low,
-    medium: medium == null ? null : medium,
-    high: high == null ? null : high,
+    threshold_pct: normalized == null ? DEFAULT_THRESHOLD : normalized,
   };
 }
 
-export async function setAlertThreshold(level, thresholdPct) {
-  const validLevels = ['low', 'medium', 'high'];
-  if (!validLevels.includes(level)) {
-    throw new Error('Invalid severity level');
-  }
+export async function setAlertThreshold(thresholdPct) {
   const normalized = normalizeThresholdNumber(thresholdPct);
   if (normalized == null) {
     throw new Error('Invalid threshold value');
   }
 
-  const thresholds = await getAlertThresholds();
-  thresholds[level] = normalized;
-  await writeJson(thresholdsFile, thresholds);
-  return thresholds;
+  const next = { threshold_pct: normalized };
+  await writeJson(thresholdsFile, next);
+  return next;
 }
 
-export async function deleteAlertThreshold(level) {
-  const validLevels = ['low', 'medium', 'high'];
-  if (!validLevels.includes(level)) {
-    throw new Error('Invalid severity level');
-  }
-
-  const thresholds = await getAlertThresholds();
-  thresholds[level] = null;
-  await writeJson(thresholdsFile, thresholds);
-  return thresholds;
-}
-
-function thresholdEntriesForMatching(thresholds) {
-  const valid = Object.entries(thresholds || {})
-    .map(([level, threshold]) => ({ level, threshold: normalizeThresholdNumber(threshold) }))
-    .filter((entry) => entry.threshold != null)
-    .sort((a, b) => b.threshold - a.threshold);
-  return valid;
+export async function resetAlertThreshold() {
+  const next = { threshold_pct: DEFAULT_THRESHOLD };
+  await writeJson(thresholdsFile, next);
+  return next;
 }
 
 export function classifyAlertSeverity(dropPct, thresholds) {
-  const entries = thresholdEntriesForMatching(thresholds);
+  const threshold = normalizeThresholdNumber(thresholds?.threshold_pct);
   const pct = Number(dropPct);
-  if (!Number.isFinite(pct)) return null;
-  const match = entries.find((entry) => pct >= entry.threshold);
-  return match ? match.level : null;
+  if (!Number.isFinite(pct) || threshold == null || pct < threshold) return null;
+  if (pct >= threshold * 2) return 'high';
+  if (pct >= threshold * 1.5) return 'medium';
+  return 'low';
 }
 
 export async function appendAlertHistory(events) {
@@ -133,4 +103,23 @@ export async function getAlertHistory(limit = 500) {
   const rows = await readJson(historyFile, []);
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
   return rows.slice(-safeLimit).reverse();
+}
+
+export async function getLastAlertCount() {
+  const state = await readJson(countStateFile, { count: null, updated_at: null });
+  const count = Number(state?.count);
+  return {
+    count: Number.isFinite(count) ? count : null,
+    updated_at: state?.updated_at || null,
+  };
+}
+
+export async function setLastAlertCount(count) {
+  const n = Number(count);
+  const next = {
+    count: Number.isFinite(n) ? n : null,
+    updated_at: new Date().toISOString(),
+  };
+  await writeJson(countStateFile, next);
+  return next;
 }

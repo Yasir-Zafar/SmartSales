@@ -22,6 +22,7 @@ export const Navbar = () => {
             <Link to="/owner/alerts" className="text-gray-400 hover:text-gray-200 transition-colors">Drop Alerts</Link>
             <Link to="/dropped-status" className="text-gray-400 hover:text-gray-200 transition-colors">Dropped Status</Link>
             <Link to="/owner/sales-summary" className="text-gray-400 hover:text-gray-200 transition-colors">Sales Summary</Link>
+            <Link to="/owner/customer-segments" className="text-gray-400 hover:text-gray-200 transition-colors">Customer Segments</Link>
           </>
         )}
         {user?.role === 'ANALYST' && (

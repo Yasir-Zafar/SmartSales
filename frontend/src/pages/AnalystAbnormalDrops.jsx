@@ -28,12 +28,6 @@ export const AnalystAbnormalDrops = () => {
     loadDrops();
   }, []);
 
-  const severityClass = (severity) => {
-    if (severity === 'high') return 'border-red-500 bg-red-900/20';
-    if (severity === 'medium') return 'border-yellow-500 bg-yellow-900/20';
-    return 'border-blue-500 bg-blue-900/20';
-  };
-
   const timeframeCutoff = (() => {
     const now = Date.now();
     if (timeframe === '1h') return now - 60 * 60 * 1000;
@@ -86,7 +80,7 @@ export const AnalystAbnormalDrops = () => {
               <p className="text-gray-400 text-sm">No active notifications.</p>
             ) : (
               notifications.map((alert, idx) => (
-                <div key={`${alert.product}-${idx}`} className={`border rounded-lg p-3 ${severityClass(alert.severity)}`}>
+                <div key={`${alert.product}-${idx}`} className="border border-teal-500/40 bg-teal-900/20 rounded-lg p-3">
                   <p className="text-sm font-medium text-gray-100">{alert.product}</p>
                   <p className="text-xs text-gray-300">Drop {alert.drop_pct}% ({alert.severity})</p>
                 </div>

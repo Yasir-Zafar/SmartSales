@@ -63,6 +63,53 @@ export const SalesRecords = () => {
     setFilter((prev) => [...prev, '']);
   };
 
+  const csvEscape = (value) => {
+    const str = value == null ? '' : String(value);
+    if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const handleExportCsv = () => {
+    if (!records.length) return;
+
+    const headers = [
+      'Date',
+      'Transaction',
+      'Product',
+      'Category',
+      'Qty',
+      'Unit Price',
+      'Total Price',
+    ];
+
+    const rows = records.map((r) => [
+      r.sale_date || 'N/A',
+      r.transaction_id || 'N/A',
+      r.product_name || 'N/A',
+      r.category || 'N/A',
+      r.quantity ?? '-',
+      parseFloat(r.unit_price || 0).toFixed(2),
+      parseFloat(r.total_price || 0).toFixed(2),
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map(csvEscape).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const now = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sales-records-filtered-${now}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -179,7 +226,7 @@ export const SalesRecords = () => {
             </div>
           </div>
 
-              <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               type="submit"
               className="bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2 transition"
@@ -199,6 +246,14 @@ export const SalesRecords = () => {
               className="bg-gray-700 hover:bg-gray-600 text-white rounded-md px-4 py-2 transition"
             >
               Reset
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={!records.length}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md px-4 py-2 transition"
+            >
+              Export filtered CSV
             </button>
           </div>
         </form>

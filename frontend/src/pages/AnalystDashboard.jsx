@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
 const API_URL = 'http://localhost:5000/api';
+const PIE_COLORS = ['#14b8a6', '#8b5cf6', '#f59e0b', '#ec4899', '#22d3ee', '#84cc16', '#ef4444'];
+const ANOMALY_REFRESH_MS = 10 * 60 * 1000;
 
 export const AnalystDashboard = () => {
   const { user } = useAuth();
@@ -11,6 +13,9 @@ export const AnalystDashboard = () => {
   const [loadingChart, setLoadingChart] = useState(false);
   const [chartError, setChartError] = useState('');
   const [hoveredBar, setHoveredBar] = useState(null);
+  const [anomalyCount, setAnomalyCount] = useState(0);
+  const [anomalyRefreshing, setAnomalyRefreshing] = useState(false);
+  const [anomalyError, setAnomalyError] = useState('');
 
   const [retrainOpen, setRetrainOpen] = useState(false);
   const [startDate, setStartDate] = useState('');
@@ -55,6 +60,28 @@ export const AnalystDashboard = () => {
       }
     };
     fetchTopProducts();
+  }, []);
+
+  const loadAnomalyCount = async () => {
+    setAnomalyRefreshing(true);
+    setAnomalyError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/insights/alerts/notifications/abnormal-drops`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAnomalyCount(Number(res.data?.count || 0));
+    } catch (e) {
+      setAnomalyError(e.response?.data?.message || 'Could not refresh anomaly count');
+    } finally {
+      setAnomalyRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAnomalyCount();
+    const id = setInterval(loadAnomalyCount, ANOMALY_REFRESH_MS);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -160,6 +187,27 @@ export const AnalystDashboard = () => {
 
   const ens = forecastData?.forecast?.models?.ensemble;
   const metrics = forecastData?.forecast?.metrics?.ensemble || {};
+  const pieTotal = segments.reduce((sum, s) => sum + Number(s?.size || 0), 0);
+  const pieData = segments
+    .map((s, idx) => ({
+      label: s?.label || `Segment ${idx + 1}`,
+      size: Number(s?.size || 0),
+      color: PIE_COLORS[idx % PIE_COLORS.length],
+    }))
+    .filter((s) => s.size > 0);
+
+  const createArc = (cx, cy, r, startAngle, endAngle) => {
+    const start = {
+      x: cx + r * Math.cos(startAngle),
+      y: cy + r * Math.sin(startAngle),
+    };
+    const end = {
+      x: cx + r * Math.cos(endAngle),
+      y: cy + r * Math.sin(endAngle),
+    };
+    const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+    return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900">
@@ -191,8 +239,19 @@ export const AnalystDashboard = () => {
           </div>
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
             <h4 className="text-sm font-medium text-gray-400 uppercase">Anomalies Detected</h4>
-            <p className="text-3xl font-bold text-rose-500 mt-2">3</p>
-            <p className="text-xs text-gray-500 mt-1">This week</p>
+            <p className="text-3xl font-bold text-rose-500 mt-2">{anomalyCount}</p>
+            <div className="flex items-center justify-between mt-2 gap-2">
+              <p className="text-xs text-gray-500">Current above-threshold count</p>
+              <button
+                type="button"
+                onClick={loadAnomalyCount}
+                disabled={anomalyRefreshing}
+                className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-60"
+              >
+                {anomalyRefreshing ? 'Refreshing…' : 'Refresh'}
+              </button>
+            </div>
+            {anomalyError && <p className="text-xs text-red-400 mt-2">{anomalyError}</p>}
           </div>
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
             <h4 className="text-sm font-medium text-gray-400 uppercase">Forecast Accuracy</h4>
@@ -298,6 +357,69 @@ export const AnalystDashboard = () => {
         </div>
 
         <div className="mt-8 grid grid-cols-1 gap-6">
+          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-50 mb-1">Customer segment distribution</h3>
+            <p className="text-xs text-gray-500 mb-4">Labelled pie chart of customer segment sizes.</p>
+            {segLoading ? (
+              <p className="text-gray-400 text-sm">Loading segment distribution…</p>
+            ) : segError ? (
+              <p className="text-red-400 text-sm">{segError}</p>
+            ) : !pieData.length || pieTotal <= 0 ? (
+              <p className="text-gray-400 text-sm">No segment distribution data available.</p>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                <div className="flex justify-center">
+                  <svg viewBox="0 0 320 320" className="w-full max-w-[320px]">
+                    {(() => {
+                      let currentAngle = -Math.PI / 2;
+                      return pieData.map((segment) => {
+                        const portion = segment.size / pieTotal;
+                        const nextAngle = currentAngle + portion * Math.PI * 2;
+                        const midAngle = (currentAngle + nextAngle) / 2;
+                        const labelX = 160 + 110 * Math.cos(midAngle);
+                        const labelY = 160 + 110 * Math.sin(midAngle);
+                        const path = createArc(160, 160, 90, currentAngle, nextAngle);
+                        const percent = (portion * 100).toFixed(1);
+                        currentAngle = nextAngle;
+                        return (
+                          <g key={segment.label}>
+                            <path d={path} fill={segment.color} stroke="#111827" strokeWidth="2" />
+                            <text
+                              x={labelX}
+                              y={labelY}
+                              fill="#e5e7eb"
+                              fontSize="10"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                            >
+                              {percent}%
+                            </text>
+                          </g>
+                        );
+                      });
+                    })()}
+                  </svg>
+                </div>
+                <div className="space-y-2">
+                  {pieData.map((segment) => {
+                    const pct = ((segment.size / pieTotal) * 100).toFixed(1);
+                    return (
+                      <div key={segment.label} className="flex items-center gap-3 text-sm">
+                        <span
+                          className="inline-block h-3 w-3 rounded-full"
+                          style={{ backgroundColor: segment.color }}
+                        />
+                        <span className="text-gray-200">{segment.label}</span>
+                        <span className="text-gray-500">({segment.size})</span>
+                        <span className="text-teal-300">{pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Vertical Bar Chart */}
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
             <h3 className="text-lg font-semibold text-gray-50 mb-1">Top 10 Products</h3>
