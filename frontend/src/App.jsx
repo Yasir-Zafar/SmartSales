@@ -15,6 +15,7 @@ import { CompareTimePeriods } from './pages/CompareTimePeriods';
 import { OwnerSalesSummary } from './pages/OwnerSalesSummary';
 import { OwnerAlerts } from './pages/OwnerAlerts';
 import { OwnerFiveDayForecast } from './pages/OwnerFiveDayForecast';
+import { OwnerCustomerSegments } from './pages/OwnerCustomerSegments';
 import { AnalystAbnormalDrops } from './pages/AnalystAbnormalDrops';
 import { StaffOperations } from './pages/StaffOperations';
 import { DroppedStatus } from './pages/DroppedStatus';
@@ -79,6 +80,11 @@ function App() {
           <Route path="/owner/forecasts" element={
             <ProtectedRoute roles={['OWNER']}>
               <OwnerFiveDayForecast />
+            </ProtectedRoute>
+          } />
+          <Route path="/owner/customer-segments" element={
+            <ProtectedRoute roles={['OWNER']}>
+              <OwnerCustomerSegments />
             </ProtectedRoute>
           } />
           <Route path="/compare-periods" element={
