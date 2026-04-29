@@ -38,6 +38,12 @@ const authenticateToken = async (req, res, next) => {
     };
     next();
   } catch (err) {
+    const code = err?.cause?.code || err?.code;
+    if (code === 'ENOTFOUND') {
+      return res.status(503).json({
+        message: 'Authentication service unreachable (Supabase DNS lookup failed). Check SUPABASE_URL/network.',
+      });
+    }
     return res.status(403).json({ message: 'Authentication failed' });
   }
 };

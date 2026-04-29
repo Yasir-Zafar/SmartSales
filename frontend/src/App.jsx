@@ -17,6 +17,7 @@ import { OwnerAlerts } from './pages/OwnerAlerts';
 import { OwnerFiveDayForecast } from './pages/OwnerFiveDayForecast';
 import { AnalystAbnormalDrops } from './pages/AnalystAbnormalDrops';
 import { StaffOperations } from './pages/StaffOperations';
+import { DroppedStatus } from './pages/DroppedStatus';
 
 // --- MAIN APP ---
 function App() {
@@ -88,6 +89,11 @@ function App() {
           <Route path="/analyst/abnormal-drops" element={
             <ProtectedRoute roles={['ANALYST']}>
               <AnalystAbnormalDrops />
+            </ProtectedRoute>
+          } />
+          <Route path="/dropped-status" element={
+            <ProtectedRoute roles={['OWNER', 'ANALYST']}>
+              <DroppedStatus />
             </ProtectedRoute>
           } />
           <Route path="/staff/operations" element={
