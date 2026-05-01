@@ -1,6 +1,7 @@
 import { getMlBaseUrl, loadMeta, getHistoricalMeanDaily, abnormalDropAlert, confidenceRating, trendDriverFromForecast, staffActionFromInventoryRiskRow, upsellMessageFromTopProducts } from '../utils/mlInsights.js';
 import { appendAlertHistory, classifyAlertSeverity, getAlertHistory, getAlertThresholds, getLastAlertCount, resetAlertThreshold, setAlertThreshold, setLastAlertCount } from '../utils/alertingStore.js';
 import { sendOwnerAnomalyCountChangeEmail } from '../utils/ownerAlertMailer.js';
+import { supabaseAdmin } from '../config/db.js';
 
 const TEST_ALERT_RECIPIENTS = ['dpix720@gmail.com', 'l233029@lhr.nu.edu.pk'];
 
