@@ -372,6 +372,45 @@ export async function ownerForecasts(req, res) {
   }
 }
 
+function labelSegment(ratio) {
+  if (ratio >= 0.8) return { label: 'Champions', recommendation: 'Send loyalty rewards and early access to new products.' };
+  if (ratio >= 0.5) return { label: 'Loyal Customers', recommendation: 'Upsell premium alternatives and bundle deals.' };
+  if (ratio >= 0.3) return { label: 'Potential Loyalists', recommendation: 'Offer a loyalty program invitation.' };
+  if (ratio >= 0.1) return { label: 'At Risk', recommendation: 'Send a win-back offer or personalised discount.' };
+  return { label: 'Lost', recommendation: 'Send a re-engagement campaign with a strong incentive.' };
+}
+
+function computeLabelsFromDB(rows) {
+  const allDates = new Set();
+  const customerMap = {};
+
+  for (const row of rows) {
+    const cid = Number(row.customer_id);
+    if (!Number.isFinite(cid) || !row.sale_date) continue;
+
+    allDates.add(String(row.sale_date));
+
+    if (!customerMap[cid]) {
+      customerMap[cid] = {
+        customer_id: cid,
+        shopping_days: new Set(),
+      };
+    }
+
+    customerMap[cid].shopping_days.add(String(row.sale_date));
+  }
+
+  const totalDays = allDates.size || 1;
+
+  const labels = {};
+  for (const [cid, c] of Object.entries(customerMap)) {
+    const ratio = c.shopping_days.size / totalDays;
+    labels[Number(cid)] = labelSegment(ratio);
+  }
+
+  return labels;
+}
+
 export async function ownerCustomerSegments(req, res) {
   try {
     const queryCustomerId = req.query.customer_id != null
@@ -382,37 +421,37 @@ export async function ownerCustomerSegments(req, res) {
       return res.status(400).json({ message: 'Invalid customer_id' });
     }
 
-    const customerIds = [];
+    const { data: rows, error } = await supabaseAdmin
+      .from('daily_sales')
+      .select('customer_id, sale_date')
+      .order('customer_id', { ascending: true });
 
-    if (queryCustomerId != null) {
-      customerIds.push(queryCustomerId);
-    } else {
-      const { data: rows, error } = await supabaseAdmin
-        .from('daily_sales')
-        .select('customer_id')
-        .order('customer_id', { ascending: true });
+    if (error) {
+      return res.status(400).json({ message: error.message });
+    }
 
-      if (error) {
-        return res.status(400).json({ message: error.message });
-      }
+    const labelMap = computeLabelsFromDB(rows || []);
 
-      const unique = new Set();
-      for (const row of rows || []) {
-        const id = Number(row?.customer_id);
-        if (Number.isFinite(id)) unique.add(id);
-      }
-      customerIds.push(...Array.from(unique).sort((a, b) => a - b));
+    const customerIds = Object.keys(labelMap).map(Number).sort((a, b) => a - b);
+
+    const filteredIds = queryCustomerId != null
+      ? customerIds.filter((id) => id === queryCustomerId)
+      : customerIds;
+
+    if (queryCustomerId != null && filteredIds.length === 0) {
+      return res.status(404).json({ message: `Customer ${queryCustomerId} not found` });
     }
 
     const segments = [];
-    for (const customerId of customerIds) {
+    for (const customerId of filteredIds) {
       try {
         const seg = await mlGet(`/segments/${customerId}`);
+        const { label, recommendation } = labelMap[customerId] || { label: 'Lost', recommendation: 'Send a re-engagement campaign with a strong incentive.' };
         segments.push({
           customer_id: seg.customer_id,
           segment_id: seg.segment_id,
-          segment_label: seg.segment_label,
-          recommendation: seg.recommendation,
+          segment_label: label,
+          recommendation,
           total_purchases: seg.total_purchases,
           total_spend: seg.total_spend,
         });
