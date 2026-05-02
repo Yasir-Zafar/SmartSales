@@ -142,15 +142,27 @@ export const StaffDashboard = () => {
           </div>
         </div>
 
-        <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
-          <h3 className="text-lg font-semibold text-gray-50 mb-2">Operations</h3>
-          <p className="text-xs text-gray-500 mb-4">Live sales summary and restock guidance are now in a dedicated page.</p>
-          <Link
-            to="/staff/operations"
-            className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-          >
-            Open Operations Page
-          </Link>
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-teal-500/20">
+            <h3 className="text-lg font-semibold text-gray-50 mb-2">Operations</h3>
+            <p className="text-xs text-gray-500 mb-4">Live sales summary and restock guidance.</p>
+            <Link
+              to="/staff/operations"
+              className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+            >
+              Open Operations Page
+            </Link>
+          </div>
+          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-rose-500/20">
+            <h3 className="text-lg font-semibold text-gray-50 mb-2">Inventory</h3>
+            <p className="text-xs text-gray-500 mb-4">All products, prices, and quantities. Low stock (under 2) is highlighted in red.</p>
+            <Link
+              to="/staff/inventory"
+              className="inline-flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+            >
+              Open Inventory
+            </Link>
+          </div>
         </div>
 
         {/* Cards */}

@@ -125,6 +125,16 @@ export const OwnerDashboard = () => {
         </div>
 
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-rose-500/20">
+            <h3 className="text-lg font-semibold text-gray-50 mb-2">Inventory</h3>
+            <p className="text-gray-400 text-sm mb-4">See all products and stock levels. Low stock is highlighted in red.</p>
+            <Link
+              to="/owner/inventory"
+              className="inline-flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+            >
+              Open Inventory
+            </Link>
+          </div>
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-red-500/20">
             <h3 className="text-lg font-semibold text-gray-50 mb-2">Abnormal Drop Alerts</h3>
             <p className="text-gray-400 text-sm mb-4">Moved to a dedicated page for easier monitoring.</p>
