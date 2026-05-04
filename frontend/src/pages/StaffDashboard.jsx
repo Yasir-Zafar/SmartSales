@@ -3,11 +3,56 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
+const API_URL = 'http://localhost:5000/api';
+
+const NavCard = ({ to, icon, title, subtitle, badge, children, accent }) => {
+  const accentMap = {
+    teal: 'border-teal-500/20 hover:border-teal-500/50 hover:bg-teal-900/10',
+    rose: 'border-rose-500/20 hover:border-rose-500/50 hover:bg-rose-900/10',
+    violet: 'border-violet-500/20 hover:border-violet-500/50 hover:bg-violet-900/10',
+    amber: 'border-amber-500/20 hover:border-amber-500/50 hover:bg-amber-900/10',
+  };
+  const arrowMap = {
+    teal: 'text-teal-400 group-hover:translate-x-1',
+    rose: 'text-rose-400 group-hover:translate-x-1',
+    violet: 'text-violet-400 group-hover:translate-x-1',
+    amber: 'text-amber-400 group-hover:translate-x-1',
+  };
+
+  return (
+    <Link
+      to={to}
+      className={`group flex flex-col bg-gray-800 border rounded-xl shadow-xl p-5 transition-all duration-200 ${accentMap[accent] || accentMap.teal}`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-xl">{icon}</span>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-50">{title}</h3>
+            <p className="text-gray-400 text-sm">{subtitle}</p>
+          </div>
+        </div>
+        <svg className={`w-5 h-5 transition-transform ${arrowMap[accent] || arrowMap.teal}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+      {badge && (
+        <span className="mt-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 w-fit">
+          {badge}
+        </span>
+      )}
+      {children && <div className="mt-3">{children}</div>}
+    </Link>
+  );
+};
+
 export const StaffDashboard = () => {
   const { user } = useAuth();
   const [salesSummary, setSalesSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState('');
+  const [invRisks, setInvRisks] = useState([]);
+  const [invLoading, setInvLoading] = useState(true);
 
   // Upload modal state
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -22,7 +67,6 @@ export const StaffDashboard = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
 
-  // --- Upload Modal ---
   const openUploadModal = () => {
     setSelectedFile(null);
     setUploadResult(null);
@@ -57,7 +101,7 @@ export const StaffDashboard = () => {
     formData.append('file', selectedFile);
 
     try {
-      const res = await fetch('http://localhost:5000/api/csv', {
+      const res = await fetch(`${API_URL}/csv`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -69,14 +113,13 @@ export const StaffDashboard = () => {
       } else {
         setUploadResult({ success: false, message: data.message || 'Upload failed.', errors: data.errors || [] });
       }
-    } catch (err) {
+    } catch {
       setUploadResult({ success: false, message: 'Network error. Could not reach the server.' });
     } finally {
       setUploading(false);
     }
   };
 
-  // --- History Modal ---
   const openHistoryModal = async () => {
     setHistoryModalOpen(true);
     setHistoryLoading(true);
@@ -84,7 +127,7 @@ export const StaffDashboard = () => {
 
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch('http://localhost:5000/api/csv', {
+      const res = await fetch(`${API_URL}/csv`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -93,7 +136,7 @@ export const StaffDashboard = () => {
       } else {
         setHistoryError(data.message || 'Failed to load history.');
       }
-    } catch (err) {
+    } catch {
       setHistoryError('Network error. Could not reach the server.');
     } finally {
       setHistoryLoading(false);
@@ -107,24 +150,40 @@ export const StaffDashboard = () => {
   };
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Bearer ${token}` };
+
     const loadSummary = async () => {
       setSummaryLoading(true);
       setSummaryError('');
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/insights/staff/sales-summary', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(`${API_URL}/insights/staff/sales-summary`, { headers });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Could not load sales summary');
         setSalesSummary(data);
       } catch (err) {
-        setSummaryError(err.message || 'Could not load sales summary');
+        setSummaryError(err.message);
       } finally {
         setSummaryLoading(false);
       }
     };
+
+    const loadInv = async () => {
+      setInvLoading(true);
+      try {
+        const res = await fetch(`${API_URL}/insights/staff/inventory/risk`, { headers });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        setInvRisks(data.risks || []);
+      } catch {
+        setInvRisks([]);
+      } finally {
+        setInvLoading(false);
+      }
+    };
+
     loadSummary();
+    loadInv();
   }, []);
 
   const statusColor = (status) => {
@@ -133,12 +192,13 @@ export const StaffDashboard = () => {
     return 'text-yellow-400';
   };
 
+  const todayItems = salesSummary?.today?.top_items || [];
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-900">
       <Navbar />
       <div className="p-8">
 
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-gray-50">Staff Dashboard</h2>
@@ -161,119 +221,118 @@ export const StaffDashboard = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4" />
               </svg>
-              Upload Daily Sales CSV
+              Upload CSV
             </button>
           </div>
         </div>
 
-<div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-  <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-teal-500/20">
-    <h3 className="text-lg font-semibold text-gray-50 mb-2">Operations</h3>
-    <p className="text-xs text-gray-500 mb-4">Live sales summary and restock guidance.</p>
-    <div className="flex flex-wrap gap-3">
-      <Link
-        to="/staff/operations"
-        className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-      >
-        Open Operations Page
-      </Link>
-      <Link
-        to="/staff/sales-summary"
-        className="inline-flex items-center justify-center bg-violet-500 hover:bg-violet-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-      >
-        Detailed Sales Summary
-      </Link>
-    </div>
-  </div>
-  <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-rose-500/20">
-    <h3 className="text-lg font-semibold text-gray-50 mb-2">Inventory</h3>
-    <p className="text-xs text-gray-500 mb-4">All products, prices, and quantities. Below 10 units uses tiered warnings (0 = strongest).</p>
-    <Link
-      to="/staff/inventory"
-      className="inline-flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-    >
-      Open Inventory
-    </Link>
-  </div>
-</div>
+        <div className="mt-8">
+          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">Navigate</h3>
 
-<div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-  <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-    <h3 className="text-lg font-semibold text-gray-50 mb-2">Latest Day Sales</h3>
-    {summaryLoading ? (
-      <p className="text-gray-400 text-sm">Loading summary...</p>
-    ) : summaryError ? (
-      <p className="text-red-400 text-sm">{summaryError}</p>
-    ) : (
-      <>
-        <p className="text-3xl font-bold text-teal-400">${salesSummary?.today?.revenue || '0.00'}</p>
-        <p className="text-xs text-gray-400 mt-1">{salesSummary?.today?.transactions || 0} transactions</p>
-        {salesSummary?.today?.date && (
-          <p className="text-xs text-gray-500 mt-1">Date: {salesSummary.today.date}</p>
-        )}
-        {!!salesSummary?.today?.top_items?.length && (
-          <div className="mt-3">
-            <p className="text-xs text-gray-500 mb-1">Top items</p>
-            <ul className="space-y-1">
-              {salesSummary.today.top_items.slice(0, 3).map((item) => (
-                <li key={item.product_name} className="text-xs text-gray-300 flex justify-between gap-2">
-                  <span className="truncate">{item.product_name}</span>
-                  <span className="text-teal-300">{item.quantity}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </>
-    )}
-  </div>
-  <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-    <h3 className="text-lg font-semibold text-gray-50 mb-2">Latest 7-Day Sales</h3>
-    {summaryLoading ? (
-      <p className="text-gray-400 text-sm">Loading summary...</p>
-    ) : summaryError ? (
-      <p className="text-red-400 text-sm">{summaryError}</p>
-    ) : (
-      <>
-        <p className="text-3xl font-bold text-violet-400">${salesSummary?.week?.revenue || '0.00'}</p>
-        <p className="text-xs text-gray-400 mt-1">{salesSummary?.week?.transactions || 0} transactions</p>
-        {salesSummary?.week?.start_date && salesSummary?.week?.end_date && (
-          <p className="text-xs text-gray-500 mt-1">
-            Window: {salesSummary.week.start_date} to {salesSummary.week.end_date}
-          </p>
-        )}
-        {!!salesSummary?.week?.top_items?.length && (
-          <div className="mt-3">
-            <p className="text-xs text-gray-500 mb-1">Top items this window</p>
-            <ul className="space-y-1">
-              {salesSummary.week.top_items.slice(0, 3).map((item) => (
-                <li key={item.product_name} className="text-xs text-gray-300 flex justify-between gap-2">
-                  <span className="truncate">{item.product_name}</span>
-                  <span className="text-violet-300">{item.quantity}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </>
-    )}
-  </div>
-</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
 
-        {/* Cards */}
-        <div className="mt-8 grid grid-cols-1 gap-6">
+            <NavCard
+              to="/staff/operations"
+              icon="⚙️"
+              title="Operations"
+              subtitle="Restock guidance and sales overview"
+              accent="teal"
+            />
+
+            <NavCard
+              to="/staff/sales-summary"
+              icon="📊"
+              title="Detailed Sales Summary"
+              subtitle="Item-level breakdowns and daily trends"
+              accent="violet"
+            >
+              {summaryLoading ? (
+                <p className="text-gray-500 text-xs">Loading...</p>
+              ) : summaryError ? (
+                <p className="text-red-400 text-xs">Could not load</p>
+              ) : (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-300">Today</span>
+                  <span className="text-teal-400 font-semibold">${salesSummary?.today?.revenue || '0.00'}</span>
+                </div>
+              )}
+            </NavCard>
+
+            <NavCard
+              to="/staff/inventory"
+              icon="📦"
+              title="Inventory"
+              subtitle="All products and stock levels"
+              accent="rose"
+            />
+
+          </div>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Recent Transactions</h3>
-            <p className="text-gray-400">Latest sales and customer orders</p>
+            <h3 className="text-lg font-semibold text-gray-50 mb-2">Latest Day Sales</h3>
+            {summaryLoading ? (
+              <p className="text-gray-400 text-sm">Loading summary...</p>
+            ) : summaryError ? (
+              <p className="text-red-400 text-sm">{summaryError}</p>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-teal-400">${salesSummary?.today?.revenue || '0.00'}</p>
+                <p className="text-xs text-gray-400 mt-1">{salesSummary?.today?.transactions || 0} transactions</p>
+                {salesSummary?.today?.date && (
+                  <p className="text-xs text-gray-500 mt-1">Date: {salesSummary.today.date}</p>
+                )}
+                {todayItems.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-500 mb-1">Top items</p>
+                    <ul className="space-y-1">
+                      {todayItems.slice(0, 3).map((item) => (
+                        <li key={item.product_name} className="text-xs text-gray-300 flex justify-between gap-2">
+                          <span className="truncate">{item.product_name}</span>
+                          <span className="text-teal-300">{item.quantity}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Quick Actions</h3>
-            <p className="text-gray-400">Process orders, update inventory</p>
+            <h3 className="text-lg font-semibold text-gray-50 mb-2">Latest 7-Day Sales</h3>
+            {summaryLoading ? (
+              <p className="text-gray-400 text-sm">Loading summary...</p>
+            ) : summaryError ? (
+              <p className="text-red-400 text-sm">{summaryError}</p>
+            ) : (
+              <>
+                <p className="text-3xl font-bold text-violet-400">${salesSummary?.week?.revenue || '0.00'}</p>
+                <p className="text-xs text-gray-400 mt-1">{salesSummary?.week?.transactions || 0} transactions</p>
+                {salesSummary?.week?.start_date && salesSummary?.week?.end_date && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Window: {salesSummary.week.start_date} to {salesSummary.week.end_date}
+                  </p>
+                )}
+                {salesSummary?.week?.top_items?.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-500 mb-1">Top items this window</p>
+                    <ul className="space-y-1">
+                      {salesSummary.week.top_items.slice(0, 3).map((item) => (
+                        <li key={item.product_name} className="text-xs text-gray-300 flex justify-between gap-2">
+                          <span className="truncate">{item.product_name}</span>
+                          <span className="text-violet-300">{item.quantity}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Upload Modal */}
       {uploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
@@ -339,7 +398,6 @@ export const StaffDashboard = () => {
         </div>
       )}
 
-      {/* History Modal */}
       {historyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6">

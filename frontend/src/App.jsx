@@ -95,7 +95,7 @@ function App() {
             </ProtectedRoute>
           } />
           <Route path="/compare-periods" element={
-            <ProtectedRoute roles={['ANALYST']}>
+            <ProtectedRoute roles={['ANALYST', 'OWNER']}>
               <CompareTimePeriods />
             </ProtectedRoute>
           } />

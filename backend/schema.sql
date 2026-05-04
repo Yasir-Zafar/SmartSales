@@ -30,8 +30,13 @@ CREATE TABLE IF NOT EXISTS products (
   name TEXT,
   category TEXT,
   price NUMERIC(10,2),
+  cost_price NUMERIC(10,2) DEFAULT 0,
   stock_quantity INT
 );
+
+-- Migration: ensure existing deployments get cost_price column
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS cost_price NUMERIC(10,2) DEFAULT 0;
 
 -- Migration safety: ensure existing deployments get this column too
 ALTER TABLE daily_sales

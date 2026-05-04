@@ -21,6 +21,10 @@ import {
   staffInventoryRisk,
   staffCustomerUpsell,
   staffSalesSummary,
+  ownerRevenueThresholdAlert,
+  getOwnerRevenueThreshold,
+  setOwnerRevenueThreshold,
+  resetOwnerRevenueThreshold,
 } from '../controllers/insightsController.js';
 
 const router = express.Router();
@@ -38,6 +42,12 @@ router.get('/owner/forecasts/latest', authenticateToken, authorizeRoles('OWNER',
 router.get('/owner/kpis/live', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerLiveKpis);
 router.get('/owner/forecasts', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerForecasts);
 router.get('/owner/customer-segments', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerCustomerSegments);
+
+// Owner: revenue threshold alerts
+router.get('/owner/alerts/revenue-threshold', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerRevenueThresholdAlert);
+router.get('/owner/alerts/revenue-threshold/threshold', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), getOwnerRevenueThreshold);
+router.put('/owner/alerts/revenue-threshold/threshold', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), setOwnerRevenueThreshold);
+router.delete('/owner/alerts/revenue-threshold/threshold', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), resetOwnerRevenueThreshold);
 
 // Analyst: full forecast payload + metrics + derived trust/trend
 router.get('/analyst/forecast/:product', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystForecast);

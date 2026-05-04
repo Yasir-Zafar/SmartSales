@@ -7,6 +7,13 @@ const API_URL = 'http://localhost:5000/api';
 const PIE_COLORS = ['#14b8a6', '#8b5cf6', '#f59e0b', '#ec4899', '#22d3ee', '#84cc16', '#ef4444'];
 const ANOMALY_REFRESH_MS = 10 * 60 * 1000;
 
+const createArc = (cx, cy, r, startAngle, endAngle) => {
+  const start = { x: cx + r * Math.cos(startAngle), y: cy + r * Math.sin(startAngle) };
+  const end = { x: cx + r * Math.cos(endAngle), y: cy + r * Math.sin(endAngle) };
+  const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
+};
+
 export const AnalystDashboard = () => {
   const { user } = useAuth();
   const [topProducts, setTopProducts] = useState([]);
@@ -105,7 +112,6 @@ export const AnalystDashboard = () => {
   }, []);
 
   const maxQty = topProducts.length ? Math.max(...topProducts.map((p) => p.qty)) : 0;
-
   const getYTicks = () => {
     if (!maxQty) return [0];
     const step = Math.ceil(maxQty / 5 / 10) * 10 || 1;
@@ -117,10 +123,7 @@ export const AnalystDashboard = () => {
   const chartMax = yTicks[yTicks.length - 1] || 1;
 
   const downloadExport = async () => {
-    if (!startDate || !endDate) {
-      setRetrainMsg({ ok: false, text: 'Choose start and end dates.' });
-      return;
-    }
+    if (!startDate || !endDate) { setRetrainMsg({ ok: false, text: 'Choose start and end dates.' }); return; }
     const token = localStorage.getItem('token');
     const url = `${API_URL}/analyst/training-export?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -139,32 +142,16 @@ export const AnalystDashboard = () => {
   };
 
   const runRetrain = async () => {
-    if (!startDate || !endDate) {
-      setRetrainMsg({ ok: false, text: 'Choose start and end dates.' });
-      return;
-    }
+    if (!startDate || !endDate) { setRetrainMsg({ ok: false, text: 'Choose start and end dates.' }); return; }
     setRetrainBusy(true);
     setRetrainMsg(null);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post(
-        `${API_URL}/analyst/retrain`,
-        { startDate, endDate },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setRetrainMsg({
-        ok: true,
-        text: res.data?.message || 'ML reloaded.',
-        detail: res.data?.ml,
-      });
+      const res = await axios.post(`${API_URL}/analyst/retrain`, { startDate, endDate }, { headers: { Authorization: `Bearer ${token}` } });
+      setRetrainMsg({ ok: true, text: res.data?.message || 'ML reloaded.', detail: res.data?.ml });
     } catch (e) {
-      setRetrainMsg({
-        ok: false,
-        text: e.response?.data?.message || e.message || 'Retrain failed',
-      });
-    } finally {
-      setRetrainBusy(false);
-    }
+      setRetrainMsg({ ok: false, text: e.response?.data?.message || e.message || 'Retrain failed' });
+    } finally { setRetrainBusy(false); }
   };
 
   const loadForecast = async () => {
@@ -177,50 +164,29 @@ export const AnalystDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       const [forecastRes, compareRes] = await Promise.all([
-        axios.get(`${API_URL}/insights/analyst/forecast/${encodeURIComponent(p)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${API_URL}/insights/analyst/forecast-vs-actual/${encodeURIComponent(p)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => null),
+        axios.get(`${API_URL}/insights/analyst/forecast/${encodeURIComponent(p)}`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${API_URL}/insights/analyst/forecast-vs-actual/${encodeURIComponent(p)}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
       ]);
       setForecastData(forecastRes.data);
       setComparisonData(compareRes?.data || null);
     } catch (e) {
       setFcError(e.response?.data?.message || 'Forecast unavailable');
-    } finally {
-      setFcLoading(false);
-    }
+    } finally { setFcLoading(false); }
   };
 
   const ens = forecastData?.forecast?.models?.ensemble;
   const metrics = forecastData?.forecast?.metrics?.ensemble || {};
   const pieTotal = segments.reduce((sum, s) => sum + Number(s?.size || 0), 0);
-  const pieData = segments
-    .map((s, idx) => ({
-      label: s?.label || `Segment ${idx + 1}`,
-      size: Number(s?.size || 0),
-      color: PIE_COLORS[idx % PIE_COLORS.length],
-    }))
-    .filter((s) => s.size > 0);
+  const pieData = segments.map((s, idx) => ({ label: s?.label || `Segment ${idx + 1}`, size: Number(s?.size || 0), color: PIE_COLORS[idx % PIE_COLORS.length] })).filter((s) => s.size > 0);
 
-  const createArc = (cx, cy, r, startAngle, endAngle) => {
-    const start = {
-      x: cx + r * Math.cos(startAngle),
-      y: cy + r * Math.sin(startAngle),
-    };
-    const end = {
-      x: cx + r * Math.cos(endAngle),
-      y: cy + r * Math.sin(endAngle),
-    };
-    const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
-    return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y} Z`;
-  };
+  const compMape = comparisonData?.metrics?.mape_pct;
+  const compAccuracy = compMape != null ? Math.max(0, 100 - compMape) : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900">
       <Navbar />
       <div className="p-8">
+
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-2xl font-semibold text-gray-50">Analyst Dashboard</h2>
@@ -228,23 +194,14 @@ export const AnalystDashboard = () => {
           </div>
           <button
             type="button"
-            onClick={() => {
-              setRetrainOpen(true);
-              setRetrainMsg(null);
-            }}
+            onClick={() => { setRetrainOpen(true); setRetrainMsg(null); }}
             className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg"
           >
             Retrain
           </button>
         </div>
 
-        {/* Stat cards */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h4 className="text-sm font-medium text-gray-400 uppercase">Sales Trends</h4>
-            <p className="text-3xl font-bold text-teal-500 mt-2">↑ 12.5%</p>
-            <p className="text-xs text-gray-500 mt-1">30-day trend</p>
-          </div>
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
             <h4 className="text-sm font-medium text-gray-400 uppercase">Anomalies Detected</h4>
             <p className="text-3xl font-bold text-rose-500 mt-2">{anomalyCount}</p>
@@ -261,14 +218,23 @@ export const AnalystDashboard = () => {
             </div>
             {anomalyError && <p className="text-xs text-red-400 mt-2">{anomalyError}</p>}
           </div>
+
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h4 className="text-sm font-medium text-gray-400 uppercase">Forecast Accuracy</h4>
-            <p className="text-3xl font-bold text-purple-500 mt-2">94.2%</p>
-            <p className="text-xs text-gray-500 mt-1">Last 7 days</p>
+            <h4 className="text-sm font-medium text-gray-400 uppercase">Segments Tracked</h4>
+            <p className="text-3xl font-bold text-violet-500 mt-2">{segments.length || '—'}</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {pieTotal > 0 ? `${pieTotal} customers classified` : 'Run ML to segment customers'}
+            </p>
+          </div>
+
+          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+            <h4 className="text-sm font-medium text-gray-400 uppercase">Products Analyzed</h4>
+            <p className="text-3xl font-bold text-teal-500 mt-2">{topProducts.length || '—'}</p>
+            <p className="text-xs text-gray-500 mt-1">Showing top sellers by volume</p>
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="mt-8">
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
             <h3 className="text-lg font-semibold text-gray-50 mb-4">Product forecast &amp; accuracy</h3>
             <p className="text-xs text-gray-500 mb-3">Enter a product name (lowercase, as in ML artifacts).</p>
@@ -289,134 +255,164 @@ export const AnalystDashboard = () => {
               </button>
             </div>
             {fcError && <p className="text-red-400 text-sm mt-3">{fcError}</p>}
-            {forecastData && (
-              <div className="mt-4 space-y-2 text-sm">
-                <p className="text-gray-300">
-                  <span className="text-gray-500">5-day total (ensemble):</span>{' '}
-                  <span className="text-teal-400 font-semibold">{ens?.total || 'N/A'}</span>
-                </p>
-                <p className="text-gray-300">
-                  <span className="text-gray-500">Avg daily (ensemble):</span>{' '}
-                  <span className="text-purple-400 font-semibold">{ens?.avg_daily || 'N/A'}</span>
-                </p>
-                <p className="text-gray-300">
-                  <span className="text-gray-500">MAE (ensemble):</span>{' '}
-                  {metrics.mae != null ? metrics.mae.toFixed(4) : '—'}
-                </p>
-                <p className="text-gray-300">
-                  <span className="text-gray-500">RMSE (ensemble):</span>{' '}
-                  {metrics.rmse != null ? metrics.rmse.toFixed(4) : '—'}
-                </p>
-                <p className="text-gray-300">
-                  <span className="text-gray-500">Confidence:</span>{' '}
-                  <span className={`font-semibold ${
-                    forecastData.analyst?.confidence_rating === 'High' ? 'text-green-400' :
-                    forecastData.analyst?.confidence_rating === 'Medium' ? 'text-yellow-400' :
-                    'text-red-400'
-                  }`}>
-                    {forecastData.analyst?.confidence_rating}
-                  </span> — {forecastData.analyst?.confidence_reason}
-                </p>
-                <p className="text-gray-400 text-xs">
-                  Trend driver: <span className="text-teal-300">{forecastData.analyst?.trend_driver}</span> — {forecastData.analyst?.trend_reason}
-                </p>
-                {forecastData.analyst?.previous_persisted_runs?.length > 0 && (
-                  <div className="mt-3 border-t border-gray-700 pt-3">
-                    <p className="text-gray-500 text-xs mb-2">Recent persisted forecast totals (5-day, same product)</p>
-                    <ul className="text-xs text-gray-400 space-y-1">
-                      {forecastData.analyst.previous_persisted_runs.map((r, i) => (
-                        <li key={i}>
-                          {r.created_at ? new Date(r.created_at).toLocaleString() : '—'} — total{' '}
-                          {r.ensemble_total_5d || 'N/A'}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {comparisonData && (
-                  <div className="mt-3 border-t border-gray-700 pt-3">
-                    <p className="text-gray-500 text-xs mb-2">
-                      Latest forecast vs actual ({comparisonData.forecast_window?.start} to {comparisonData.forecast_window?.end})
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                      <p className="text-gray-300">MAE: <span className="text-teal-300">{comparisonData.metrics?.mae ?? '—'}</span></p>
-                      <p className="text-gray-300">RMSE: <span className="text-violet-300">{comparisonData.metrics?.rmse ?? '—'}</span></p>
-                      <p className="text-gray-300">MAPE: <span className="text-amber-300">{comparisonData.metrics?.mape_pct != null ? `${comparisonData.metrics.mape_pct}%` : '—'}</span></p>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Total forecast: {comparisonData.totals?.forecast ?? '—'} | actual: {comparisonData.totals?.actual ?? '—'}
-                    </p>
-                    <div className="mt-2 overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-gray-500 border-b border-gray-700">
-                            <th className="py-1 pr-2 text-left">Date</th>
-                            <th className="py-1 pr-2 text-left">Forecast</th>
-                            <th className="py-1 pr-2 text-left">Actual</th>
-                            <th className="py-1 pr-2 text-left">Error</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(comparisonData.points || []).map((point) => (
-                            <tr key={point.date} className="border-b border-gray-800">
-                              <td className="py-1 pr-2 text-gray-400">{point.date}</td>
-                              <td className="py-1 pr-2 text-teal-300">{point.forecast}</td>
-                              <td className="py-1 pr-2 text-gray-300">{point.actual}</td>
-                              <td className={`py-1 pr-2 ${point.error > 0 ? 'text-amber-300' : point.error < 0 ? 'text-rose-300' : 'text-gray-400'}`}>
-                                {point.error}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
 
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Popular products by segment</h3>
-            {segLoading ? (
-              <p className="text-gray-400 text-sm">Loading segments…</p>
-            ) : segError ? (
-              <p className="text-red-400 text-sm">{segError}</p>
-            ) : (
-              <div className="max-h-72 overflow-y-auto space-y-3">
-                {segments.map((s) => (
-                  <div key={s.segment_id ?? s.label} className="border border-gray-700 rounded-lg p-3">
-                    <p className="text-teal-400 font-medium text-sm">{s.label}</p>
-                    <p className="text-xs text-gray-500">Size: {s.size}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Top products:{' '}
-                      {(s.top_products || [])
-                        .slice(0, 5)
-                        .map((p) => (typeof p === 'string' ? p : p?.product))
-                        .filter(Boolean)
-                        .join(', ') || '—'}
-                    </p>
+            {forecastData && (
+              <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Forecast details</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">5-day total</p>
+                      <p className="text-xl font-bold text-teal-400">{ens?.total ?? '—'}</p>
+                    </div>
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">Avg daily</p>
+                      <p className="text-xl font-bold text-purple-400">{ens?.avg_daily ?? '—'}</p>
+                    </div>
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">MAE</p>
+                      <p className="text-xl font-bold text-gray-200">{metrics.mae != null ? metrics.mae.toFixed(3) : '—'}</p>
+                    </div>
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-xs text-gray-500">RMSE</p>
+                      <p className="text-xl font-bold text-gray-200">{metrics.rmse != null ? metrics.rmse.toFixed(3) : '—'}</p>
+                    </div>
                   </div>
-                ))}
+                  <div className="bg-gray-900 rounded-lg p-3">
+                    <p className="text-xs text-gray-500 mb-1">Confidence</p>
+                    <span className={`text-sm font-semibold ${
+                      forecastData.analyst?.confidence_rating === 'High' ? 'text-green-400' :
+                      forecastData.analyst?.confidence_rating === 'Medium' ? 'text-amber-400' :
+                      'text-red-400'
+                    }`}>
+                      {forecastData.analyst?.confidence_rating}
+                    </span>
+                    <span className="text-xs text-gray-400 ml-2">{forecastData.analyst?.confidence_reason}</span>
+                  </div>
+                  <div className="bg-gray-900 rounded-lg p-3">
+                    <p className="text-xs text-gray-500 mb-1">Trend driver</p>
+                    <p className="text-sm text-gray-300">{forecastData.analyst?.trend_driver}</p>
+                    <p className="text-xs text-gray-400 mt-1">{forecastData.analyst?.trend_reason}</p>
+                  </div>
+                  {forecastData.analyst?.previous_persisted_runs?.length > 0 && (
+                    <div className="bg-gray-900 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-2">Recent persisted forecast totals</p>
+                      <ul className="space-y-1">
+                        {forecastData.analyst.previous_persisted_runs.slice(0, 4).map((r, i) => (
+                          <li key={i} className="text-xs text-gray-400 flex justify-between">
+                            <span>{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</span>
+                            <span className="text-teal-400 font-semibold">{r.ensemble_total_5d ?? 'N/A'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  {comparisonData ? (
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">
+                        Forecast vs actual
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        {comparisonData.forecast_window?.start} to {comparisonData.forecast_window?.end}
+                      </p>
+
+                      {compAccuracy != null && (
+                        <div className="bg-gray-900 rounded-lg p-4 text-center">
+                          <p className="text-xs text-gray-500 mb-1">Prediction accuracy</p>
+                          <p className={`text-3xl font-bold ${compAccuracy >= 80 ? 'text-green-400' : compAccuracy >= 60 ? 'text-amber-400' : 'text-red-400'}`}>
+                            {compAccuracy.toFixed(1)}%
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-gray-900 rounded-lg p-3 text-center">
+                          <p className="text-xs text-gray-500">MAE</p>
+                          <p className="text-lg font-bold text-teal-400">{comparisonData.metrics?.mae ?? '—'}</p>
+                        </div>
+                        <div className="bg-gray-900 rounded-lg p-3 text-center">
+                          <p className="text-xs text-gray-500">RMSE</p>
+                          <p className="text-lg font-bold text-violet-400">{comparisonData.metrics?.rmse ?? '—'}</p>
+                        </div>
+                        <div className="bg-gray-900 rounded-lg p-3 text-center">
+                          <p className="text-xs text-gray-500">MAPE</p>
+                          <p className="text-lg font-bold text-amber-400">{comparisonData.metrics?.mape_pct != null ? `${comparisonData.metrics.mape_pct}%` : '—'}</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-900 rounded-lg p-3 flex justify-between text-sm">
+                        <div>
+                          <p className="text-xs text-gray-500">Forecast total</p>
+                          <p className="text-teal-400 font-semibold">{comparisonData.totals?.forecast ?? '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Actual total</p>
+                          <p className="text-gray-300 font-semibold">{comparisonData.totals?.actual ?? '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Error</p>
+                          <p className={`font-semibold ${(comparisonData.totals?.error || 0) >= 0 ? 'text-amber-400' : 'text-rose-400'}`}>
+                            {comparisonData.totals?.error ?? '—'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-gray-500 border-b border-gray-700">
+                              <th className="py-2 pr-3 text-left font-medium">Date</th>
+                              <th className="py-2 pr-3 text-right font-medium">Forecast</th>
+                              <th className="py-2 pr-3 text-right font-medium">Actual</th>
+                              <th className="py-2 text-right font-medium">Error</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(comparisonData.points || []).map((point) => (
+                              <tr key={point.date} className="border-b border-gray-800 hover:bg-gray-700/20">
+                                <td className="py-2 pr-3 text-gray-400">{point.date}</td>
+                                <td className="py-2 pr-3 text-right text-teal-300">{point.forecast}</td>
+                                <td className="py-2 pr-3 text-right text-gray-300">{point.actual}</td>
+                                <td className={`py-2 text-right font-medium ${point.error > 0 ? 'text-amber-400' : point.error < 0 ? 'text-rose-400' : 'text-gray-400'}`}>
+                                  {point.error > 0 ? '+' : ''}{point.error}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-900 rounded-lg p-8 text-center">
+                      <p className="text-gray-500 text-sm">No forecast-vs-actual data available yet.</p>
+                      <p className="text-gray-600 text-xs mt-1">Upload sales data past a forecast window to see comparisons.</p>
+                    </div>
+                  )}
+                </div>
+
               </div>
             )}
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-1 gap-6">
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
             <h3 className="text-lg font-semibold text-gray-50 mb-1">Customer segment distribution</h3>
-            <p className="text-xs text-gray-500 mb-4">Labelled pie chart of customer segment sizes.</p>
+            <p className="text-xs text-gray-500 mb-4">Customer segment sizes.</p>
             {segLoading ? (
-              <p className="text-gray-400 text-sm">Loading segment distribution…</p>
+              <p className="text-gray-400 text-sm">Loading…</p>
             ) : segError ? (
               <p className="text-red-400 text-sm">{segError}</p>
             ) : !pieData.length || pieTotal <= 0 ? (
               <p className="text-gray-400 text-sm">No segment distribution data available.</p>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
-                <div className="flex justify-center">
-                  <svg viewBox="0 0 320 320" className="w-full max-w-[320px]">
+              <div className="flex flex-col sm:flex-row gap-6 items-center">
+                <div className="flex-shrink-0">
+                  <svg viewBox="0 0 320 320" className="w-52 h-52">
                     {(() => {
                       let currentAngle = -Math.PI / 2;
                       return pieData.map((segment) => {
@@ -431,34 +427,22 @@ export const AnalystDashboard = () => {
                         return (
                           <g key={segment.label}>
                             <path d={path} fill={segment.color} stroke="#111827" strokeWidth="2" />
-                            <text
-                              x={labelX}
-                              y={labelY}
-                              fill="#e5e7eb"
-                              fontSize="10"
-                              textAnchor="middle"
-                              dominantBaseline="middle"
-                            >
-                              {percent}%
-                            </text>
+                            <text x={labelX} y={labelY} fill="#e5e7eb" fontSize="10" textAnchor="middle" dominantBaseline="middle">{percent}%</text>
                           </g>
                         );
                       });
                     })()}
                   </svg>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 flex-1">
                   {pieData.map((segment) => {
                     const pct = ((segment.size / pieTotal) * 100).toFixed(1);
                     return (
                       <div key={segment.label} className="flex items-center gap-3 text-sm">
-                        <span
-                          className="inline-block h-3 w-3 rounded-full"
-                          style={{ backgroundColor: segment.color }}
-                        />
+                        <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: segment.color }} />
                         <span className="text-gray-200">{segment.label}</span>
                         <span className="text-gray-500">({segment.size})</span>
-                        <span className="text-teal-300">{pct}%</span>
+                        <span className="text-teal-300 ml-auto">{pct}%</span>
                       </div>
                     );
                   })}
@@ -467,164 +451,125 @@ export const AnalystDashboard = () => {
             )}
           </div>
 
-          {/* Vertical Bar Chart */}
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-1">Top 10 Products</h3>
-            <p className="text-xs text-gray-500 mb-6">By total quantity sold</p>
-
-            {loadingChart ? (
-              <p className="text-gray-400">Loading chart...</p>
-            ) : chartError ? (
-              <p className="text-red-400">{chartError}</p>
-            ) : !topProducts.length ? (
-              <p className="text-gray-400">No product sales data available.</p>
+            <h3 className="text-lg font-semibold text-gray-50 mb-1">Popular products by segment</h3>
+            <p className="text-xs text-gray-500 mb-4">Top products per customer segment.</p>
+            {segLoading ? (
+              <p className="text-gray-400 text-sm">Loading…</p>
+            ) : segError ? (
+              <p className="text-red-400 text-sm">{segError}</p>
             ) : (
-              <div className="relative">
-                <div className="flex gap-0">
-                  <div className="flex flex-col-reverse justify-between pr-3 pb-10" style={{ minWidth: '40px' }}>
-                    {yTicks.map((tick) => (
-                      <span key={tick} className="text-xs text-gray-500 text-right leading-none">
-                        {tick}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="flex-1 flex flex-col">
-                    <div
-                      className="relative flex items-end gap-2 border-l border-b border-gray-700"
-                      style={{ height: '260px' }}
-                    >
-                      {yTicks.map((tick) => (
-                        <div
-                          key={tick}
-                          className="absolute left-0 right-0 border-t border-gray-700/50"
-                          style={{ bottom: `${(tick / chartMax) * 100}%` }}
-                        />
-                      ))}
-
-                      {topProducts.map((p, i) => {
-                        const heightPct = (p.qty / chartMax) * 100;
-                        const isHovered = hoveredBar === i;
-                        return (
-                          <div
-                            key={p.name}
-                            className="relative flex-1 flex flex-col justify-end group cursor-pointer"
-                            style={{ height: '100%' }}
-                            onMouseEnter={() => setHoveredBar(i)}
-                            onMouseLeave={() => setHoveredBar(null)}
-                          >
-                            {isHovered && (
-                              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-10 bg-gray-900 border border-teal-700 text-white rounded-lg px-4 py-3 whitespace-nowrap shadow-xl pointer-events-none">
-                                <p className="text-sm font-bold text-teal-300 mb-1">{p.name}</p>
-                                <p className="text-xs text-gray-400">
-                                  Qty: <span className="font-bold text-white text-sm">{p.qty}</span>
-                                </p>
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-teal-700" />
-                              </div>
-                            )}
-
-                            <div
-                              className="w-full rounded-t-md transition-all duration-150"
-                              style={{
-                                height: `${Math.max(2, heightPct)}%`,
-                                background: isHovered
-                                  ? 'linear-gradient(to top, #0d9488, #67e8f9)'
-                                  : 'linear-gradient(to top, #0f766e, #2dd4bf)',
-                                boxShadow: isHovered ? '0 0 12px rgba(45,212,191,0.4)' : 'none',
-                              }}
-                            />
-                          </div>
-                        );
-                      })}
+              <div className="max-h-72 overflow-y-auto space-y-2">
+                {segments.map((s) => (
+                  <div key={s.segment_id ?? s.label} className="border border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-teal-400 font-medium text-sm">{s.label}</p>
+                      <p className="text-xs text-gray-500">Size: {s.size}</p>
                     </div>
-
-                    <div className="flex gap-2 mt-2">
-                      {topProducts.map((p) => (
-                        <div key={p.name} className="flex-1 text-center">
-                          <span
-                            className="text-xs text-gray-400 block overflow-hidden"
-                            style={{
-                              writingMode: 'vertical-rl',
-                              transform: 'rotate(180deg)',
-                              maxHeight: '80px',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                            title={p.name}
-                          >
-                            {p.name}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {(s.top_products || [])
+                        .slice(0, 5)
+                        .map((p) => (typeof p === 'string' ? p : p?.product))
+                        .filter(Boolean)
+                        .join(', ') || '—'}
+                    </p>
                   </div>
-                </div>
+                ))}
               </div>
             )}
           </div>
         </div>
+
+        <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
+          <h3 className="text-lg font-semibold text-gray-50 mb-1">Top 10 Products</h3>
+          <p className="text-xs text-gray-500 mb-6">By total quantity sold</p>
+
+          {loadingChart ? (
+            <p className="text-gray-400">Loading chart...</p>
+          ) : chartError ? (
+            <p className="text-red-400">{chartError}</p>
+          ) : !topProducts.length ? (
+            <p className="text-gray-400">No product sales data available.</p>
+          ) : (
+            <div className="relative">
+              <div className="flex gap-0">
+                <div className="flex flex-col-reverse justify-between pr-3 pb-10" style={{ minWidth: '40px' }}>
+                  {yTicks.map((tick) => (
+                    <span key={tick} className="text-xs text-gray-500 text-right leading-none">{tick}</span>
+                  ))}
+                </div>
+                <div className="flex-1 flex flex-col">
+                  <div className="relative flex items-end gap-2 border-l border-b border-gray-700" style={{ height: '260px' }}>
+                    {yTicks.map((tick) => (
+                      <div key={tick} className="absolute left-0 right-0 border-t border-gray-700/50" style={{ bottom: `${(tick / chartMax) * 100}%` }} />
+                    ))}
+                    {topProducts.map((p, i) => {
+                      const heightPct = (p.qty / chartMax) * 100;
+                      const isHovered = hoveredBar === i;
+                      return (
+                        <div
+                          key={p.name}
+                          className="relative flex-1 flex flex-col justify-end group cursor-pointer"
+                          style={{ height: '100%' }}
+                          onMouseEnter={() => setHoveredBar(i)}
+                          onMouseLeave={() => setHoveredBar(null)}
+                        >
+                          {isHovered && (
+                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-10 bg-gray-900 border border-teal-700 text-white rounded-lg px-4 py-3 whitespace-nowrap shadow-xl pointer-events-none">
+                              <p className="text-sm font-bold text-teal-300 mb-1">{p.name}</p>
+                              <p className="text-xs text-gray-400">Qty: <span className="font-bold text-white text-sm">{p.qty}</span></p>
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-teal-700" />
+                            </div>
+                          )}
+                          <div
+                            className="w-full rounded-t-md transition-all duration-150"
+                            style={{
+                              height: `${Math.max(2, heightPct)}%`,
+                              background: isHovered ? 'linear-gradient(to top, #0d9488, #67e8f9)' : 'linear-gradient(to top, #0f766e, #2dd4bf)',
+                              boxShadow: isHovered ? '0 0 12px rgba(45,212,191,0.4)' : 'none',
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    {topProducts.map((p) => (
+                      <div key={p.name} className="flex-1 text-center">
+                        <span className="text-xs text-gray-400 block overflow-hidden" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '80px', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
 
       {retrainOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
             <h3 className="text-lg font-semibold text-gray-50 mb-2">Retrain — export daily sales</h3>
-            <p className="text-xs text-gray-500 mb-4">
-              Exports the flat CSV (ML training format) from <code className="text-gray-400">daily_sales</code> for
-              the selected period. You can download only, or push to the ML service (reload).
-            </p>
+            <p className="text-xs text-gray-500 mb-4">Exports the flat CSV (ML training format) from <code className="text-gray-400">daily_sales</code> for the selected period. Download only, or push to ML service.</p>
             <div className="space-y-3">
               <div>
                 <label className="text-xs text-gray-500">Start date</label>
-                <input
-                  type="date"
-                  className="w-full mt-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
+                <input type="date" className="w-full mt-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
               </div>
               <div>
                 <label className="text-xs text-gray-500">End date</label>
-                <input
-                  type="date"
-                  className="w-full mt-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                />
+                <input type="date" className="w-full mt-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
               </div>
             </div>
             {retrainMsg && (
-              <div
-                className={`mt-4 text-sm rounded-lg px-3 py-2 ${
-                  retrainMsg.ok ? 'bg-teal-900/40 text-teal-200' : 'bg-red-900/40 text-red-200'
-                }`}
-              >
-                {retrainMsg.text}
-              </div>
+              <div className={`mt-4 text-sm rounded-lg px-3 py-2 ${retrainMsg.ok ? 'bg-teal-900/40 text-teal-200' : 'bg-red-900/40 text-red-200'}`}>{retrainMsg.text}</div>
             )}
             <div className="flex flex-wrap gap-2 mt-6">
-              <button
-                type="button"
-                onClick={() => setRetrainOpen(false)}
-                className="flex-1 min-w-[100px] bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm py-2 rounded-lg"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={downloadExport}
-                className="flex-1 min-w-[100px] bg-gray-600 hover:bg-gray-500 text-white text-sm py-2 rounded-lg"
-              >
-                Download CSV
-              </button>
-              <button
-                type="button"
-                onClick={runRetrain}
-                disabled={retrainBusy}
-                className="flex-1 min-w-[100px] bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm py-2 rounded-lg"
-              >
-                {retrainBusy ? '…' : 'Reload ML'}
-              </button>
+              <button type="button" onClick={() => setRetrainOpen(false)} className="flex-1 min-w-[100px] bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm py-2 rounded-lg">Close</button>
+              <button type="button" onClick={downloadExport} className="flex-1 min-w-[100px] bg-gray-600 hover:bg-gray-500 text-white text-sm py-2 rounded-lg">Download CSV</button>
+              <button type="button" onClick={runRetrain} disabled={retrainBusy} className="flex-1 min-w-[100px] bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm py-2 rounded-lg">{retrainBusy ? '…' : 'Reload ML'}</button>
             </div>
           </div>
         </div>

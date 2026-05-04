@@ -7,7 +7,6 @@ import { Navbar } from '../components/Navbar';
 const API_URL = 'http://localhost:5000/api';
 const KPI_REFRESH_MS = 15000;
 
-// ─── PDF Export Hook ──────────────────────────────────────────────────────────
 const usePdfExport = (filename = 'dashboard.pdf') => {
   const exportRef = useRef(null);
 
@@ -40,7 +39,6 @@ const usePdfExport = (filename = 'dashboard.pdf') => {
   return { exportRef, exportToPdf };
 };
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, change, valueColor }) => (
   <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
     <h4 className="text-sm font-medium text-gray-400 uppercase">{label}</h4>
@@ -49,38 +47,95 @@ const StatCard = ({ label, value, change, valueColor }) => (
   </div>
 );
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+const NavCard = ({ to, icon, title, subtitle, badge, children, accent }) => {
+  const accentMap = {
+    teal: 'border-teal-500/20 hover:border-teal-500/50 hover:bg-teal-900/10',
+    rose: 'border-rose-500/20 hover:border-rose-500/50 hover:bg-rose-900/10',
+    red: 'border-red-500/20 hover:border-red-500/50 hover:bg-red-900/10',
+    violet: 'border-violet-500/20 hover:border-violet-500/50 hover:bg-violet-900/10',
+  };
+  const arrowMap = {
+    teal: 'text-teal-400 group-hover:translate-x-1',
+    rose: 'text-rose-400 group-hover:translate-x-1',
+    red: 'text-red-400 group-hover:translate-x-1',
+    violet: 'text-violet-400 group-hover:translate-x-1',
+  };
+
+  return (
+    <Link
+      to={to}
+      className={`group flex flex-col bg-gray-800 border rounded-xl shadow-xl p-5 transition-all duration-200 ${accentMap[accent] || accentMap.teal}`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-xl">{icon}</span>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-50">{title}</h3>
+            <p className="text-gray-400 text-sm">{subtitle}</p>
+          </div>
+        </div>
+        <svg className={`w-5 h-5 transition-transform ${arrowMap[accent] || arrowMap.teal}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+      {badge && (
+        <span className="mt-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 w-fit">
+          {badge}
+        </span>
+      )}
+      {children && <div className="mt-3">{children}</div>}
+    </Link>
+  );
+};
+
 export const OwnerDashboard = () => {
   const { user } = useAuth();
   const [forecastBatch, setForecastBatch] = useState(null);
   const [liveKpis, setLiveKpis] = useState(null);
   const [kpiError, setKpiError] = useState('');
+  const [inventoryRisk, setInventoryRisk] = useState([]);
+  const [anomalyCount, setAnomalyCount] = useState(0);
+
+  const fetchData = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Bearer ${token}` };
+
+    try {
+      const [fcRes, kpiRes] = await Promise.all([
+        axios.get(`${API_URL}/insights/owner/forecasts/latest`, { headers }),
+        axios.get(`${API_URL}/insights/owner/kpis/live`, { headers }),
+      ]);
+      setForecastBatch(fcRes.data);
+      setLiveKpis(kpiRes.data);
+      setKpiError('');
+    } catch (e) {
+      console.error('Owner dashboard KPI/forecast load failed', e);
+      setKpiError('Could not load live data');
+    }
+
+    try {
+      const riskRes = await axios.get(`${API_URL}/insights/staff/inventory/risk`, { headers });
+      setInventoryRisk(riskRes.data?.risks || []);
+    } catch {
+      setInventoryRisk([]);
+    }
+
+    try {
+      const anomalyRes = await axios.get(`${API_URL}/insights/alerts/notifications/abnormal-drops`, {
+        headers,
+        params: { notify_owner: true },
+      });
+      setAnomalyCount(Number(anomalyRes.data?.count || 0));
+    } catch {
+      setAnomalyCount(0);
+    }
+  }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const load = async () => {
-      try {
-        const [fcRes, kpiRes] = await Promise.all([
-          axios.get(`${API_URL}/insights/owner/forecasts/latest`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          axios.get(`${API_URL}/insights/owner/kpis/live`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-        setForecastBatch(fcRes.data);
-        setLiveKpis(kpiRes.data);
-        setKpiError('');
-      } catch (e) {
-        console.error('Owner forecasts load failed', e);
-        setKpiError('Could not load live KPI data');
-      }
-    };
-
-    load();
-    const id = setInterval(load, KPI_REFRESH_MS);
+    fetchData();
+    const id = setInterval(fetchData, KPI_REFRESH_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [fetchData]);
 
   const { exportRef, exportToPdf } = usePdfExport('owner-dashboard.pdf');
 
@@ -92,6 +147,14 @@ export const OwnerDashboard = () => {
         ? `${liveKpis.kpis.revenue_change_pct >= 0 ? '+' : ''}${liveKpis.kpis.revenue_change_pct}% vs previous month`
         : 'No previous month baseline',
       valueColor: 'text-teal-500',
+    },
+    {
+      label: 'Total Profit',
+      value: liveKpis ? `$${Number(liveKpis.kpis?.total_profit || 0).toLocaleString()}` : '—',
+      change: liveKpis?.kpis?.profit_margin_pct != null
+        ? `${liveKpis.kpis.profit_margin_pct}% margin`
+        : 'Set cost prices to calculate',
+      valueColor: liveKpis?.kpis?.total_profit >= 0 ? 'text-emerald-400' : 'text-red-400',
     },
     {
       label: 'Total Sales (Units)',
@@ -106,16 +169,27 @@ export const OwnerDashboard = () => {
       valueColor: 'text-purple-500',
     },
     {
-      label: 'Latest Month Revenue',
+      label: 'Month Revenue',
       value: liveKpis ? `$${Number(liveKpis.kpis?.current_month_revenue || 0).toLocaleString()}` : '—',
-      change: liveKpis?.latest_upload_at
-        ? `Latest upload: ${new Date(liveKpis.latest_upload_at).toLocaleString()}`
-        : liveKpis?.anchored_latest_sale_date
-          ? `Anchored to sales month: ${liveKpis.anchored_latest_sale_date}`
-          : 'No upload history available',
-      valueColor: 'text-green-500',
+      change: liveKpis?.kpis?.revenue_change_pct != null
+        ? `${liveKpis.kpis.revenue_change_pct >= 0 ? '+' : ''}${liveKpis.kpis.revenue_change_pct}% vs last month`
+        : 'No previous month baseline',
+      valueColor: 'text-teal-500',
+    },
+    {
+      label: 'Month Profit',
+      value: liveKpis ? `$${Number(liveKpis.kpis?.current_month_profit || 0).toLocaleString()}` : '—',
+      change: liveKpis?.kpis?.profit_change_pct != null
+        ? `${liveKpis.kpis.profit_change_pct >= 0 ? '+' : ''}${liveKpis.kpis.profit_change_pct}% vs last month`
+        : 'No previous month baseline',
+      valueColor: liveKpis?.kpis?.current_month_profit >= 0 ? 'text-emerald-400' : 'text-red-400',
     },
   ];
+
+  const highRiskItems = inventoryRisk.filter((r) => r.risk_level === 'high');
+  const topForecasts = (forecastBatch?.products || [])
+    .sort((a, b) => (b.ensemble_total_5d || 0) - (a.ensemble_total_5d || 0))
+    .slice(0, 3);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900">
@@ -123,7 +197,6 @@ export const OwnerDashboard = () => {
 
       <div ref={exportRef} className="p-8">
 
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-gray-50">Owner Dashboard</h2>
@@ -137,81 +210,94 @@ export const OwnerDashboard = () => {
           </button>
         </div>
 
-        {/* Stat Cards */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {kpiRows.map((stat) => (
             <StatCard key={stat.label} {...stat} />
           ))}
         </div>
         {kpiError && <p className="text-red-400 text-sm mt-3">{kpiError}</p>}
 
-        {/* Sales Summary + Forecast Card */}
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-teal-700/5 border border-teal-500/30 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-teal-200 mb-4">Sales Summary</h3>
-            <p className="text-gray-300 mb-4">View owner-only sales by category and optional date range.</p>
-            <Link
-              to="/owner/sales-summary"
-              className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-            >
-              Open Sales Summary
-            </Link>
-          </div>
-
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Sales Forecast</h3>
-            <p className="text-gray-400">AI-powered sales predictions and trends</p>
-          </div>
-        </div>
-
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-rose-500/20">
-            <h3 className="text-lg font-semibold text-gray-50 mb-2">Inventory</h3>
-            <p className="text-gray-400 text-sm mb-4">See all products and stock levels. Below 10 units shows tiered warnings by severity.</p>
-            <Link
-              to="/owner/inventory"
-              className="inline-flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-            >
-              Open Inventory
-            </Link>
-          </div>
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-red-500/20">
-            <h3 className="text-lg font-semibold text-gray-50 mb-2">Abnormal Drop Alerts</h3>
-            <p className="text-gray-400 text-sm mb-4">Moved to a dedicated page for easier monitoring.</p>
-            <Link
-              to="/owner/alerts"
-              className="inline-flex items-center justify-center bg-red-500 hover:bg-red-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-            >
-              Open Alerts Page
-            </Link>
-          </div>
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-teal-500/20">
-            <h3 className="text-lg font-semibold text-gray-50 mb-2">5-Day Sales Forecast</h3>
-            <p className="text-gray-400 text-sm mb-4">Moved from Analyst to a dedicated owner page.</p>
-            <Link
-              to="/owner/forecasts"
-              className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-            >
-              Open Forecast Page
-            </Link>
-            <p className="text-xs text-gray-500 mt-3">
-              Latest batch: {forecastBatch?.created_at ? new Date(forecastBatch.created_at).toLocaleString() : 'N/A'}
-            </p>
-          </div>
-        </div>
-
         <div className="mt-8">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-violet-500/20">
-            <h3 className="text-lg font-semibold text-gray-50 mb-2">Customer Segment Membership</h3>
-            <p className="text-gray-400 text-sm mb-4">
-              See what segment each customer belongs to for clearer consumer-base insights.
-            </p>
-            <Link
-              to="/owner/customer-segments"
-              className="inline-flex items-center justify-center bg-violet-500 hover:bg-violet-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-4">Navigate</h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+
+            <NavCard
+              to="/owner/sales-summary"
+              icon="📊"
+              title="Sales Summary"
+              subtitle="Filter sales by category and date range"
+              accent="teal"
+            />
+
+            <NavCard
+              to="/owner/forecasts"
+              icon="📈"
+              title="5-Day Sales Forecast"
+              subtitle="AI-powered predictions and trends"
+              accent="teal"
             >
-              Open Customer Segments
-            </Link>
+              {topForecasts.length > 0 ? (
+                <div className="space-y-1.5">
+                  {topForecasts.map((p) => (
+                    <div key={p.product_name} className="flex justify-between text-sm">
+                      <span className="text-gray-300">{p.product_name}</span>
+                      <span className="text-teal-400 font-semibold">{p.ensemble_total_5d ?? '—'}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-xs">Forecast data not yet available</p>
+              )}
+            </NavCard>
+
+            <NavCard
+              to="/owner/inventory"
+              icon="📦"
+              title="Inventory"
+              subtitle="Stock levels and warnings"
+              accent="rose"
+              badge={highRiskItems.length > 0 ? `${highRiskItems.length} high-risk item${highRiskItems.length > 1 ? 's' : ''}` : null}
+            >
+              {highRiskItems.length > 0 ? (
+                <div className="space-y-1.5">
+                  {highRiskItems.slice(0, 3).map((item) => (
+                    <div key={item.product} className="flex justify-between text-sm">
+                      <span className="text-gray-300">{item.product}</span>
+                      <span className="text-rose-400 font-semibold">{item.ensemble_total_5d ?? '—'} est.</span>
+                    </div>
+                  ))}
+                </div>
+              ) : inventoryRisk.length > 0 ? (
+                <p className="text-green-400 text-xs">No high-risk items — all clear</p>
+              ) : (
+                <p className="text-gray-500 text-xs">Inventory risk data not yet available</p>
+              )}
+            </NavCard>
+
+            <NavCard
+              to="/owner/alerts"
+              icon="🚨"
+              title="Abnormal Drop Alerts"
+              subtitle="Monitor sales anomalies and set thresholds"
+              accent="red"
+              badge={anomalyCount > 0 ? `${anomalyCount} active alert${anomalyCount > 1 ? 's' : ''}` : null}
+            >
+              {anomalyCount > 0 ? (
+                <p className="text-red-400 text-xs">Anomalies detected — review needed</p>
+              ) : (
+                <p className="text-green-400 text-xs">No current anomalies</p>
+              )}
+            </NavCard>
+
+            <NavCard
+              to="/owner/customer-segments"
+              icon="👥"
+              title="Customer Segments"
+              subtitle="RFM-based customer grouping and insights"
+              accent="violet"
+            />
+
           </div>
         </div>
 

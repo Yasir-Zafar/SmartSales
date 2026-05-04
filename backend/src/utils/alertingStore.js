@@ -7,8 +7,10 @@ const dataDir = path.resolve(__dirname, '..', '..', 'data');
 const thresholdsFile = path.join(dataDir, 'alert-thresholds.json');
 const historyFile = path.join(dataDir, 'alert-history.json');
 const countStateFile = path.join(dataDir, 'alert-count-state.json');
+const revenueThresholdFile = path.join(dataDir, 'revenue-threshold.json');
 
 const DEFAULT_THRESHOLD = 20;
+const DEFAULT_REVENUE_THRESHOLD = 100;
 
 async function ensureDir() {
   await fs.mkdir(dataDir, { recursive: true });
@@ -121,5 +123,29 @@ export async function setLastAlertCount(count) {
     updated_at: new Date().toISOString(),
   };
   await writeJson(countStateFile, next);
+  return next;
+}
+
+export async function getRevenueThreshold() {
+  const saved = await readJson(revenueThresholdFile, { threshold: DEFAULT_REVENUE_THRESHOLD });
+  const n = Number(saved?.threshold);
+  return {
+    threshold: Number.isFinite(n) && n > 0 ? Number(n.toFixed(2)) : DEFAULT_REVENUE_THRESHOLD,
+  };
+}
+
+export async function setRevenueThreshold(threshold) {
+  const n = Number(threshold);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error('Invalid threshold value');
+  }
+  const next = { threshold: Number(n.toFixed(2)) };
+  await writeJson(revenueThresholdFile, next);
+  return next;
+}
+
+export async function resetRevenueThreshold() {
+  const next = { threshold: DEFAULT_REVENUE_THRESHOLD };
+  await writeJson(revenueThresholdFile, next);
   return next;
 }

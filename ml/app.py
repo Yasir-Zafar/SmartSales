@@ -48,6 +48,8 @@ import pandas as pd
 import torch
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 
 from models import ForecastEnsemble, SeasonalLinear
 from preprocessing import (
@@ -150,6 +152,98 @@ def _load_artifacts():
             S.report = json.load(f)
 
     print(f"✅ Loaded {len(S.ensembles)} usable forecasting models")
+
+
+def _label_segment(rec, freq, spend):
+    if rec < 30 and freq > 5:   return "Champions"
+    if rec < 60 and freq > 3:   return "Loyal Customers"
+    if rec < 90:                return "Potential Loyalists"
+    if rec < 180:               return "At Risk"
+    return "Lost"
+
+
+def _rebuild_segmentation(num_segments: int = 5) -> dict:
+    """Re-run RFM + category affinity + KMeans on current in-memory data."""
+    if S.df is None:
+        return {"error": "No data loaded"}
+
+    seg_dir = ARTIFACTS / "segmentation"
+    seg_dir.mkdir(parents=True, exist_ok=True)
+
+    rfm = build_rfm(S.df)
+    cat_affinity = build_category_affinity(S.df)
+
+    combined = rfm.join(cat_affinity, how="inner").fillna(0)
+
+    scaler = StandardScaler()
+    X_sc = scaler.fit_transform(combined.values)
+
+    km = KMeans(n_clusters=num_segments, random_state=42, n_init=10)
+    labels = km.fit_predict(X_sc)
+    seg_s = pd.Series(labels, index=combined.index, name="segment")
+
+    profiles = []
+    for sid in range(num_segments):
+        mask = seg_s == sid
+        seg_rfm = rfm[mask]
+        members = rfm[mask].index.tolist()
+        seg_flat = S.df[S.df["customer_id"].isin(members)]
+
+        top_prods = (
+            seg_flat["product_name"].value_counts().head(5)
+            .reset_index().rename(columns={"product_name": "product", "count": "order_count"})
+            .to_dict(orient="records")
+        )
+        top_cats = (
+            seg_flat["category"].value_counts().head(3)
+            .reset_index().rename(columns={"category": "category", "count": "order_count"})
+            .to_dict(orient="records")
+        )
+
+        avg_rec = float(seg_rfm["recency"].mean())
+        avg_freq = float(seg_rfm["frequency"].mean())
+        avg_mon = float(seg_rfm["monetary"].mean())
+
+        profiles.append({
+            "segment_id": sid,
+            "size": int(mask.sum()),
+            "avg_recency_days": round(avg_rec, 1),
+            "avg_frequency": round(avg_freq, 1),
+            "avg_spend": round(avg_mon, 2),
+            "avg_unique_products": round(float(seg_rfm["unique_products"].mean()), 1),
+            "top_products": top_prods,
+            "top_categories": top_cats,
+            "label": _label_segment(avg_rec, avg_freq, avg_mon),
+        })
+
+    for fname, obj in [("kmeans.pkl", km), ("scaler.pkl", scaler)]:
+        with open(seg_dir / fname, "wb") as f:
+            pickle.dump(obj, f)
+
+    seg_config = {
+        "rfm_columns": list(rfm.columns),
+        "cat_columns": list(cat_affinity.columns),
+        "combined_columns": list(combined.columns),
+    }
+    with open(seg_dir / "config.json", "w") as f:
+        json.dump(seg_config, f, indent=2)
+    with open(seg_dir / "segment_profiles.json", "w") as f:
+        json.dump(profiles, f, indent=2)
+
+    S.kmeans = km
+    S.scaler = scaler
+    S.seg_config = seg_config
+    S.profiles = profiles
+
+    print(f"✅ Rebuilt segmentation: {num_segments} segments, {len(combined)} customers")
+    return {
+        "segments": num_segments,
+        "customers": len(combined),
+        "profiles": [
+            {"id": p["segment_id"], "label": p["label"], "size": p["size"]}
+            for p in profiles
+        ],
+    }
 
 
 async def _auto_load_data_from_backend():
@@ -273,6 +367,8 @@ async def reload_data(file: UploadFile = File(...)):
     snap_rows = build_forecast_rows_from_state(S, SEQ_LEN, FORECAST_HORIZON)
     run_batch_id = persist_forecast_snapshots(snap_rows)
 
+    seg_result = _rebuild_segmentation()
+
     return {
         "status": "reloaded",
         "rows":   len(S.df),
@@ -280,6 +376,7 @@ async def reload_data(file: UploadFile = File(...)):
         "products":  int(S.df["product_name"].nunique()),
         "forecast_snapshots_saved": len(snap_rows),
         "forecast_run_batch_id": run_batch_id,
+        "segments_rebuilt": seg_result,
     }
 
 
@@ -509,6 +606,44 @@ def inventory_risk(
     risks.sort(key=lambda r: (r["risk_level"]=="high", r["ensemble_total_5d"]), reverse=True)
     if level: risks = [r for r in risks if r["risk_level"] == level]
     return {"count": len(risks), "risks": risks}
+
+
+@app.get("/forecast/total-revenue")
+def forecast_total_revenue():
+    """Compute total forecasted revenue across all products for the next 5 days."""
+    _require_data()
+    prod_prices = {}
+    grouped = S.df.groupby("product_name")["unit_price"].mean()
+    for name, price in grouped.items():
+        prod_prices[name] = float(price)
+
+    total_units = 0.0
+    total_revenue = 0.0
+    by_product = []
+    for product, ens in S.ensembles.items():
+        if product not in S.daily.columns or len(S.daily[product]) < SEQ_LEN:
+            continue
+        series = S.daily[product].values.astype(float)
+        pred = ens.predict(series[-SEQ_LEN:], len(series) - 1)["ensemble"]
+        units = float(pred.sum())
+        price = prod_prices.get(product, 0)
+        revenue = units * price
+        total_units += units
+        total_revenue += revenue
+        by_product.append({
+            "product": product,
+            "forecast_units_5d": round(units, 2),
+            "avg_price": round(price, 2),
+            "forecast_revenue": round(revenue, 2),
+        })
+
+    by_product.sort(key=lambda x: x["forecast_revenue"], reverse=True)
+    return {
+        "total_forecast_units": round(total_units, 2),
+        "total_forecast_revenue": round(total_revenue, 2),
+        "forecast_horizon_days": FORECAST_HORIZON,
+        "by_product": by_product,
+    }
 
 
 # ── Metrics ───────────────────────────────────────────────────────────────────

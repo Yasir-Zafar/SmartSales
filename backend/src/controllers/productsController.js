@@ -5,7 +5,7 @@ export async function listProducts(req, res) {
   try {
     const { data, error } = await supabaseAdmin
       .from('products')
-      .select('id, name, category, price, stock_quantity')
+      .select('id, name, category, price, cost_price, stock_quantity')
       .order('name', { ascending: true });
 
     if (error) return res.status(400).json({ message: error.message });

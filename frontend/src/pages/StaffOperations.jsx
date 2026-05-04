@@ -30,6 +30,11 @@ export const StaffOperations = () => {
   const [invLoading, setInvLoading] = useState(true);
   const [invErr, setInvErr] = useState('');
 
+  const [custId, setCustId] = useState('');
+  const [upsell, setUpsell] = useState(null);
+  const [upsellLoading, setUpsellLoading] = useState(false);
+  const [upsellError, setUpsellError] = useState('');
+
   useEffect(() => {
     const loadSummary = async () => {
       try {
@@ -69,6 +74,27 @@ export const StaffOperations = () => {
     loadInv();
   }, []);
 
+  const loadUpsell = async () => {
+    const id = Number(custId);
+    if (!id) return;
+    setUpsellLoading(true);
+    setUpsellError('');
+    setUpsell(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/insights/staff/customers/${id}/upsell`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Could not load recommendation');
+      setUpsell(data);
+    } catch (e) {
+      setUpsellError(e.message || 'No recommendation available');
+    } finally {
+      setUpsellLoading(false);
+    }
+  };
+
   const today = summary?.today;
   const week = summary?.week;
 
@@ -77,7 +103,55 @@ export const StaffOperations = () => {
       <Navbar />
       <div className="max-w-6xl mx-auto p-6">
         <h2 className="text-3xl font-bold">Staff Operations</h2>
-        <p className="text-gray-400 mt-1">Live sales and restock guidance in one focused page.</p>
+        <p className="text-gray-400 mt-1">Live sales, restock guidance, and customer upsell recommendations.</p>
+
+        <div className="mt-6 bg-gray-800 p-6 rounded-xl shadow-xl border border-violet-500/20">
+          <h3 className="text-lg font-semibold text-gray-50 mb-2">Customer Upsell Recommendations</h3>
+          <p className="text-xs text-gray-400 mb-4">Enter a customer ID to see their segment and recommended products to upsell.</p>
+
+          <div className="flex gap-2 max-w-sm">
+            <input
+              type="number"
+              min="1"
+              value={custId}
+              onChange={(e) => setCustId(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') loadUpsell(); }}
+              placeholder="Customer ID"
+              className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+            />
+            <button
+              onClick={loadUpsell}
+              disabled={upsellLoading || !custId}
+              className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg"
+            >
+              {upsellLoading ? 'Loading…' : 'Look Up'}
+            </button>
+          </div>
+
+          {upsellError && <p className="text-red-400 text-sm mt-3">{upsellError}</p>}
+
+          {upsell && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gray-900 rounded-lg p-4">
+                <p className="text-xs text-gray-500 mb-1">Customer #{upsell.customer_id}</p>
+                <p className="text-sm font-medium text-violet-400 mb-3">Segment: {upsell.segment_label}</p>
+                <p className="text-sm text-gray-300">{upsell.upsell_message}</p>
+              </div>
+              {upsell.top_products_for_segment?.length > 0 && (
+                <div className="bg-gray-900 rounded-lg p-4">
+                  <p className="text-xs text-gray-500 mb-2">Recommended products for this segment</p>
+                  <ul className="space-y-1">
+                    {upsell.top_products_for_segment.slice(0, 5).map((p, i) => (
+                      <li key={i} className="text-sm text-teal-300">
+                        {typeof p === 'string' ? p : p?.product || '—'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="mt-6 bg-gray-800 p-6 rounded-xl shadow-xl">
           <h3 className="text-lg font-semibold text-gray-50 mb-2">Restock guidance</h3>
