@@ -24,6 +24,15 @@ CREATE TABLE IF NOT EXISTS daily_sales (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Products table
+CREATE TABLE IF NOT EXISTS products (
+  id SERIAL PRIMARY KEY,
+  name TEXT,
+  category TEXT,
+  price NUMERIC(10,2),
+  stock_quantity INT
+);
+
 -- Migration safety: ensure existing deployments get this column too
 ALTER TABLE daily_sales
   ADD COLUMN IF NOT EXISTS customer_id INT;

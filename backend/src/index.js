@@ -10,6 +10,7 @@ import csvRoutes from "./routes/csvRoutes.js";
 import insightsRoutes from "./routes/insightsRoutes.js";
 import analystRoutes from "./routes/analystRoutes.js";
 import salesSummaryRoutes from "./routes/salesSummaryRoute.js";
+import productsRoutes from "./routes/productsRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,6 +29,9 @@ app.use('/api/admin/users', adminUserManagementRoutes);
 
 // Get current user profile
 app.use('/api/me', currentUserRoutes);
+
+// Product catalog (inventory pages)
+app.use('/api/products', productsRoutes);
 
 //Temporary get request
 app.get('/', (req, res) => {

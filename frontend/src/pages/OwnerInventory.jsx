@@ -3,7 +3,91 @@ import axios from 'axios';
 import { Navbar } from '../components/Navbar';
 
 const API_URL = 'http://localhost:5000/api';
-const LOW_STOCK_THRESHOLD = 2;
+
+/** Stock at or above this is considered healthy (no warning). */
+const STOCK_OK_MIN = 10;
+
+/**
+ * Below STOCK_OK_MIN, four bands down to zero (mildest → max warning).
+ * 7–9, 4–6, 1–3, 0
+ */
+function stockBand(qtyRaw) {
+  const n = Number(qtyRaw);
+  if (!Number.isFinite(n)) {
+    return {
+      key: 'unknown',
+      label: 'Unknown',
+      rowBg: '',
+      cellTone: 'text-gray-200',
+      qtyColor: 'text-gray-400',
+      badgeClass:
+        'inline-flex items-center rounded-full bg-gray-500/15 border border-gray-500/30 px-2 py-1 text-xs font-semibold text-gray-300',
+    };
+  }
+  const q = Math.max(0, Math.floor(n));
+
+  if (q >= STOCK_OK_MIN) {
+    return {
+      key: 'ok',
+      label: 'OK',
+      rowBg: '',
+      cellTone: 'text-gray-200',
+      qtyColor: 'text-teal-300',
+      badgeClass:
+        'inline-flex items-center rounded-full bg-teal-500/10 border border-teal-500/25 px-2 py-1 text-xs font-semibold text-teal-200',
+    };
+  }
+  if (q >= 7) {
+    return {
+      key: 'watch',
+      label: 'Watch',
+      rowBg: 'bg-amber-950/35',
+      cellTone: 'text-amber-100',
+      qtyColor: 'text-amber-300',
+      badgeClass:
+        'inline-flex items-center rounded-full bg-amber-500/20 border border-amber-400/40 px-2 py-1 text-xs font-semibold text-amber-100',
+    };
+  }
+  if (q >= 4) {
+    return {
+      key: 'low',
+      label: 'Low',
+      rowBg: 'bg-orange-950/40',
+      cellTone: 'text-orange-100',
+      qtyColor: 'text-orange-300',
+      badgeClass:
+        'inline-flex items-center rounded-full bg-orange-500/20 border border-orange-400/45 px-2 py-1 text-xs font-semibold text-orange-100',
+    };
+  }
+  if (q >= 1) {
+    return {
+      key: 'urgent',
+      label: 'Urgent',
+      rowBg: 'bg-rose-950/45',
+      cellTone: 'text-rose-100',
+      qtyColor: 'text-rose-300',
+      badgeClass:
+        'inline-flex items-center rounded-full bg-rose-500/25 border border-rose-400/50 px-2 py-1 text-xs font-semibold text-rose-100',
+    };
+  }
+  return {
+    key: 'depleted',
+    label: 'Depleted',
+    rowBg: 'bg-red-950/55',
+    cellTone: 'text-red-100',
+    qtyColor: 'text-red-400',
+    badgeClass:
+      'inline-flex items-center rounded-full bg-red-600/30 border border-red-500/55 px-2 py-1 text-xs font-semibold text-red-50',
+  };
+}
+
+const LEGEND = [
+  { label: 'OK', className: stockBand(STOCK_OK_MIN).badgeClass },
+  { label: 'Watch (7–9)', className: stockBand(8).badgeClass },
+  { label: 'Low (4–6)', className: stockBand(5).badgeClass },
+  { label: 'Urgent (1–3)', className: stockBand(2).badgeClass },
+  { label: 'Depleted (0)', className: stockBand(0).badgeClass },
+];
 
 export const OwnerInventory = () => {
   const [products, setProducts] = useState([]);
@@ -40,8 +124,12 @@ export const OwnerInventory = () => {
     });
   }, [products, query]);
 
-  const lowStockCount = useMemo(
-    () => filtered.filter((p) => Number(p?.stock_quantity ?? 0) < LOW_STOCK_THRESHOLD).length,
+  const belowOkCount = useMemo(
+    () =>
+      filtered.filter((p) => {
+        const q = Number(p?.stock_quantity ?? 0);
+        return Number.isFinite(q) && q < STOCK_OK_MIN;
+      }).length,
     [filtered]
   );
 
@@ -53,16 +141,26 @@ export const OwnerInventory = () => {
           <div>
             <h2 className="text-3xl font-bold">Inventory</h2>
             <p className="text-gray-400 mt-1">
-              Products, prices, and stock levels. Items with quantity under {LOW_STOCK_THRESHOLD} are highlighted in red.
+              Stock below {STOCK_OK_MIN} uses four warning levels (watch → depleted). Quantity 0 is the strongest alert.
             </p>
             <p className="text-sm text-gray-400 mt-2">
               Showing <span className="text-teal-300 font-semibold">{filtered.length}</span> products
-              {lowStockCount ? (
+              {belowOkCount ? (
                 <>
-                  {' '}• <span className="text-rose-300 font-semibold">{lowStockCount}</span> low stock
+                  {' '}
+                  • <span className="text-amber-200 font-semibold">{belowOkCount}</span> below target (
+                  {`<${STOCK_OK_MIN}`})
                 </>
               ) : null}
             </p>
+            <div className="mt-3 flex flex-wrap gap-2 items-center">
+              <span className="text-xs text-gray-500 uppercase tracking-wide">Legend</span>
+              {LEGEND.map((item) => (
+                <span key={item.label} className={item.className}>
+                  {item.label}
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="w-full md:w-80">
@@ -97,38 +195,22 @@ export const OwnerInventory = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-700">
                   {filtered.map((p) => {
-                    const qty = Number(p?.stock_quantity ?? 0);
-                    const isLow = qty < LOW_STOCK_THRESHOLD;
+                    const band = stockBand(p?.stock_quantity);
+                    const qn = Number(p?.stock_quantity ?? 0);
+                    const displayQty = Number.isFinite(qn) ? Math.max(0, Math.floor(qn)) : '—';
                     return (
                       <tr
                         key={p.id}
-                        className={[
-                          'hover:bg-gray-700/30',
-                          isLow ? 'bg-rose-900/20' : '',
-                        ].join(' ')}
+                        className={['hover:bg-gray-700/30', band.rowBg].filter(Boolean).join(' ')}
                       >
-                        <td className={['px-3 py-2', isLow ? 'text-rose-200' : 'text-gray-200'].join(' ')}>
-                          {p?.name || '—'}
-                        </td>
-                        <td className={['px-3 py-2', isLow ? 'text-rose-200/90' : 'text-gray-200'].join(' ')}>
-                          {p?.category || '—'}
-                        </td>
-                        <td className={['px-3 py-2', isLow ? 'text-rose-200' : 'text-gray-200'].join(' ')}>
+                        <td className={['px-3 py-2', band.cellTone].join(' ')}>{p?.name || '—'}</td>
+                        <td className={['px-3 py-2 opacity-95', band.cellTone].join(' ')}>{p?.category || '—'}</td>
+                        <td className={['px-3 py-2', band.cellTone].join(' ')}>
                           ${Number(p?.price ?? 0).toFixed(2)}
                         </td>
-                        <td className={['px-3 py-2 font-semibold', isLow ? 'text-rose-300' : 'text-teal-300'].join(' ')}>
-                          {Number.isFinite(qty) ? qty : '—'}
-                        </td>
+                        <td className={['px-3 py-2 font-semibold', band.qtyColor].join(' ')}>{displayQty}</td>
                         <td className="px-3 py-2">
-                          {isLow ? (
-                            <span className="inline-flex items-center rounded-full bg-rose-500/15 border border-rose-500/30 px-2 py-1 text-xs font-semibold text-rose-200">
-                              Stockout risk
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center rounded-full bg-teal-500/10 border border-teal-500/20 px-2 py-1 text-xs font-semibold text-teal-200">
-                              OK
-                            </span>
-                          )}
+                          <span className={band.badgeClass}>{band.label}</span>
                         </td>
                       </tr>
                     );
@@ -142,4 +224,3 @@ export const OwnerInventory = () => {
     </div>
   );
 };
-
