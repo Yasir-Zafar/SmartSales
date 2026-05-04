@@ -16,6 +16,7 @@ import { OwnerSalesSummary } from './pages/OwnerSalesSummary';
 import { OwnerAlerts } from './pages/OwnerAlerts';
 import { OwnerFiveDayForecast } from './pages/OwnerFiveDayForecast';
 import { OwnerCustomerSegments } from './pages/OwnerCustomerSegments';
+import { OwnerInventory } from './pages/OwnerInventory';
 import { AnalystAbnormalDrops } from './pages/AnalystAbnormalDrops';
 import { StaffOperations } from './pages/StaffOperations';
 import { DroppedStatus } from './pages/DroppedStatus';
@@ -88,6 +89,11 @@ function App() {
               <OwnerCustomerSegments />
             </ProtectedRoute>
           } />
+          <Route path="/owner/inventory" element={
+            <ProtectedRoute roles={['OWNER']}>
+              <OwnerInventory />
+            </ProtectedRoute>
+          } />
           <Route path="/compare-periods" element={
             <ProtectedRoute roles={['ANALYST']}>
               <CompareTimePeriods />
@@ -107,6 +113,11 @@ function App() {
             <ProtectedRoute roles={['STAFF']}>
               <StaffOperations />
             </ProtectedRoute>
+          } />
+          <Route path="/staff/inventory" element={
+            <ProtectedRoute roles={['STAFF']}>
+              <OwnerInventory />
+             </ProtectedRoute>
           } />
           <Route path="/staff/sales-summary" element={
             <ProtectedRoute roles={['STAFF']}>
