@@ -40,6 +40,7 @@ export const Navbar = () => {
             <Link to="/staff" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
             <Link to="/staff/inventory" className="text-gray-400 hover:text-gray-200 transition-colors">Inventory</Link>
             <Link to="/staff/operations" className="text-gray-400 hover:text-gray-200 transition-colors">Operations</Link>
+            <Link to="/staff/sales-summary" className="text-gray-400 hover:text-gray-200 transition-colors">Sales Summary</Link>
           </>
         )}
         {user?.role === 'ADMIN' && (

@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
 const API_URL = 'http://localhost:5000/api';
+const KPI_REFRESH_MS = 15000;
 
 // ─── PDF Export Hook ──────────────────────────────────────────────────────────
 const usePdfExport = (filename = 'dashboard.pdf') => {
@@ -48,35 +49,73 @@ const StatCard = ({ label, value, change, valueColor }) => (
   </div>
 );
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-const STATS = [
-  { label: 'Total Revenue', value: '$124,500', change: '+12.5% from last month', valueColor: 'text-teal-500' },
-  { label: 'Total Sales', value: '1,842', change: '+8.2% from last month', valueColor: 'text-pink-500' },
-  { label: 'Active Customers', value: '1,240', change: '+5.1% from last month', valueColor: 'text-purple-500' },
-  { label: 'Profit Margin', value: '34.2%', change: '+2.1% from last month', valueColor: 'text-green-500' },
-];
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 export const OwnerDashboard = () => {
   const { user } = useAuth();
   const [forecastBatch, setForecastBatch] = useState(null);
+  const [liveKpis, setLiveKpis] = useState(null);
+  const [kpiError, setKpiError] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     const load = async () => {
       try {
-        const fcRes = await axios.get(`${API_URL}/insights/owner/forecasts/latest`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const [fcRes, kpiRes] = await Promise.all([
+          axios.get(`${API_URL}/insights/owner/forecasts/latest`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${API_URL}/insights/owner/kpis/live`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
         setForecastBatch(fcRes.data);
+        setLiveKpis(kpiRes.data);
+        setKpiError('');
       } catch (e) {
         console.error('Owner forecasts load failed', e);
+        setKpiError('Could not load live KPI data');
       }
     };
+
     load();
+    const id = setInterval(load, KPI_REFRESH_MS);
+    return () => clearInterval(id);
   }, []);
 
   const { exportRef, exportToPdf } = usePdfExport('owner-dashboard.pdf');
+
+  const kpiRows = [
+    {
+      label: 'Total Revenue',
+      value: liveKpis ? `$${Number(liveKpis.kpis?.total_revenue || 0).toLocaleString()}` : '—',
+      change: liveKpis?.kpis?.revenue_change_pct != null
+        ? `${liveKpis.kpis.revenue_change_pct >= 0 ? '+' : ''}${liveKpis.kpis.revenue_change_pct}% vs previous month`
+        : 'No previous month baseline',
+      valueColor: 'text-teal-500',
+    },
+    {
+      label: 'Total Sales (Units)',
+      value: liveKpis ? Number(liveKpis.kpis?.total_units_sold || 0).toLocaleString() : '—',
+      change: 'Updated from uploaded sales data',
+      valueColor: 'text-pink-500',
+    },
+    {
+      label: 'Active Customers',
+      value: liveKpis ? Number(liveKpis.kpis?.active_customers || 0).toLocaleString() : '—',
+      change: 'Distinct customers in all sales records',
+      valueColor: 'text-purple-500',
+    },
+    {
+      label: 'Latest Month Revenue',
+      value: liveKpis ? `$${Number(liveKpis.kpis?.current_month_revenue || 0).toLocaleString()}` : '—',
+      change: liveKpis?.latest_upload_at
+        ? `Latest upload: ${new Date(liveKpis.latest_upload_at).toLocaleString()}`
+        : liveKpis?.anchored_latest_sale_date
+          ? `Anchored to sales month: ${liveKpis.anchored_latest_sale_date}`
+          : 'No upload history available',
+      valueColor: 'text-green-500',
+    },
+  ];
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900">
@@ -100,10 +139,11 @@ export const OwnerDashboard = () => {
 
         {/* Stat Cards */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {STATS.map((stat) => (
+          {kpiRows.map((stat) => (
             <StatCard key={stat.label} {...stat} />
           ))}
         </div>
+        {kpiError && <p className="text-red-400 text-sm mt-3">{kpiError}</p>}
 
         {/* Sales Summary + Forecast Card */}
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">

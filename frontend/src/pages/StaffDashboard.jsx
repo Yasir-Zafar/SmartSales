@@ -1,10 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
 export const StaffDashboard = () => {
   const { user } = useAuth();
+  const [salesSummary, setSalesSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState('');
 
   // Upload modal state
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -103,6 +106,27 @@ export const StaffDashboard = () => {
     setHistoryError(null);
   };
 
+  useEffect(() => {
+    const loadSummary = async () => {
+      setSummaryLoading(true);
+      setSummaryError('');
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('http://localhost:5000/api/insights/staff/sales-summary', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Could not load sales summary');
+        setSalesSummary(data);
+      } catch (err) {
+        setSummaryError(err.message || 'Could not load sales summary');
+      } finally {
+        setSummaryLoading(false);
+      }
+    };
+    loadSummary();
+  }, []);
+
   const statusColor = (status) => {
     if (status === 'processed') return 'text-teal-400';
     if (status === 'failed') return 'text-red-400';
@@ -142,28 +166,99 @@ export const StaffDashboard = () => {
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-teal-500/20">
-            <h3 className="text-lg font-semibold text-gray-50 mb-2">Operations</h3>
-            <p className="text-xs text-gray-500 mb-4">Live sales summary and restock guidance.</p>
-            <Link
-              to="/staff/operations"
-              className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-            >
-              Open Operations Page
-            </Link>
+<div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-teal-500/20">
+    <h3 className="text-lg font-semibold text-gray-50 mb-2">Operations</h3>
+    <p className="text-xs text-gray-500 mb-4">Live sales summary and restock guidance.</p>
+    <div className="flex flex-wrap gap-3">
+      <Link
+        to="/staff/operations"
+        className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+      >
+        Open Operations Page
+      </Link>
+      <Link
+        to="/staff/sales-summary"
+        className="inline-flex items-center justify-center bg-violet-500 hover:bg-violet-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+      >
+        Detailed Sales Summary
+      </Link>
+    </div>
+  </div>
+  <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-rose-500/20">
+    <h3 className="text-lg font-semibold text-gray-50 mb-2">Inventory</h3>
+    <p className="text-xs text-gray-500 mb-4">All products, prices, and quantities. Low stock (under 2) is highlighted in red.</p>
+    <Link
+      to="/staff/inventory"
+      className="inline-flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-gray-900 font-semibold rounded-md px-4 py-2"
+    >
+      Open Inventory
+    </Link>
+  </div>
+</div>
+
+<div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+  <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+    <h3 className="text-lg font-semibold text-gray-50 mb-2">Latest Day Sales</h3>
+    {summaryLoading ? (
+      <p className="text-gray-400 text-sm">Loading summary...</p>
+    ) : summaryError ? (
+      <p className="text-red-400 text-sm">{summaryError}</p>
+    ) : (
+      <>
+        <p className="text-3xl font-bold text-teal-400">${salesSummary?.today?.revenue || '0.00'}</p>
+        <p className="text-xs text-gray-400 mt-1">{salesSummary?.today?.transactions || 0} transactions</p>
+        {salesSummary?.today?.date && (
+          <p className="text-xs text-gray-500 mt-1">Date: {salesSummary.today.date}</p>
+        )}
+        {!!salesSummary?.today?.top_items?.length && (
+          <div className="mt-3">
+            <p className="text-xs text-gray-500 mb-1">Top items</p>
+            <ul className="space-y-1">
+              {salesSummary.today.top_items.slice(0, 3).map((item) => (
+                <li key={item.product_name} className="text-xs text-gray-300 flex justify-between gap-2">
+                  <span className="truncate">{item.product_name}</span>
+                  <span className="text-teal-300">{item.quantity}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl border border-rose-500/20">
-            <h3 className="text-lg font-semibold text-gray-50 mb-2">Inventory</h3>
-            <p className="text-xs text-gray-500 mb-4">All products, prices, and quantities. Low stock (under 2) is highlighted in red.</p>
-            <Link
-              to="/staff/inventory"
-              className="inline-flex items-center justify-center bg-rose-500 hover:bg-rose-400 text-gray-900 font-semibold rounded-md px-4 py-2"
-            >
-              Open Inventory
-            </Link>
+        )}
+      </>
+    )}
+  </div>
+  <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
+    <h3 className="text-lg font-semibold text-gray-50 mb-2">Latest 7-Day Sales</h3>
+    {summaryLoading ? (
+      <p className="text-gray-400 text-sm">Loading summary...</p>
+    ) : summaryError ? (
+      <p className="text-red-400 text-sm">{summaryError}</p>
+    ) : (
+      <>
+        <p className="text-3xl font-bold text-violet-400">${salesSummary?.week?.revenue || '0.00'}</p>
+        <p className="text-xs text-gray-400 mt-1">{salesSummary?.week?.transactions || 0} transactions</p>
+        {salesSummary?.week?.start_date && salesSummary?.week?.end_date && (
+          <p className="text-xs text-gray-500 mt-1">
+            Window: {salesSummary.week.start_date} to {salesSummary.week.end_date}
+          </p>
+        )}
+        {!!salesSummary?.week?.top_items?.length && (
+          <div className="mt-3">
+            <p className="text-xs text-gray-500 mb-1">Top items this window</p>
+            <ul className="space-y-1">
+              {salesSummary.week.top_items.slice(0, 3).map((item) => (
+                <li key={item.product_name} className="text-xs text-gray-300 flex justify-between gap-2">
+                  <span className="truncate">{item.product_name}</span>
+                  <span className="text-violet-300">{item.quantity}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
+        )}
+      </>
+    )}
+  </div>
+</div>
 
         {/* Cards */}
         <div className="mt-8 grid grid-cols-1 gap-6">

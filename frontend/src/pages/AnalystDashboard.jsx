@@ -31,6 +31,7 @@ export const AnalystDashboard = () => {
   const [fcLoading, setFcLoading] = useState(false);
   const [fcError, setFcError] = useState('');
   const [forecastData, setForecastData] = useState(null);
+  const [comparisonData, setComparisonData] = useState(null);
 
   useEffect(() => {
     const fetchTopProducts = async () => {
@@ -172,12 +173,19 @@ export const AnalystDashboard = () => {
     setFcLoading(true);
     setFcError('');
     setForecastData(null);
+    setComparisonData(null);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_URL}/insights/analyst/forecast/${encodeURIComponent(p)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setForecastData(res.data);
+      const [forecastRes, compareRes] = await Promise.all([
+        axios.get(`${API_URL}/insights/analyst/forecast/${encodeURIComponent(p)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        axios.get(`${API_URL}/insights/analyst/forecast-vs-actual/${encodeURIComponent(p)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => null),
+      ]);
+      setForecastData(forecastRes.data);
+      setComparisonData(compareRes?.data || null);
     } catch (e) {
       setFcError(e.response?.data?.message || 'Forecast unavailable');
     } finally {
@@ -323,6 +331,45 @@ export const AnalystDashboard = () => {
                         </li>
                       ))}
                     </ul>
+                  </div>
+                )}
+                {comparisonData && (
+                  <div className="mt-3 border-t border-gray-700 pt-3">
+                    <p className="text-gray-500 text-xs mb-2">
+                      Latest forecast vs actual ({comparisonData.forecast_window?.start} to {comparisonData.forecast_window?.end})
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                      <p className="text-gray-300">MAE: <span className="text-teal-300">{comparisonData.metrics?.mae ?? '—'}</span></p>
+                      <p className="text-gray-300">RMSE: <span className="text-violet-300">{comparisonData.metrics?.rmse ?? '—'}</span></p>
+                      <p className="text-gray-300">MAPE: <span className="text-amber-300">{comparisonData.metrics?.mape_pct != null ? `${comparisonData.metrics.mape_pct}%` : '—'}</span></p>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Total forecast: {comparisonData.totals?.forecast ?? '—'} | actual: {comparisonData.totals?.actual ?? '—'}
+                    </p>
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-gray-500 border-b border-gray-700">
+                            <th className="py-1 pr-2 text-left">Date</th>
+                            <th className="py-1 pr-2 text-left">Forecast</th>
+                            <th className="py-1 pr-2 text-left">Actual</th>
+                            <th className="py-1 pr-2 text-left">Error</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(comparisonData.points || []).map((point) => (
+                            <tr key={point.date} className="border-b border-gray-800">
+                              <td className="py-1 pr-2 text-gray-400">{point.date}</td>
+                              <td className="py-1 pr-2 text-teal-300">{point.forecast}</td>
+                              <td className="py-1 pr-2 text-gray-300">{point.actual}</td>
+                              <td className={`py-1 pr-2 ${point.error > 0 ? 'text-amber-300' : point.error < 0 ? 'text-rose-300' : 'text-gray-400'}`}>
+                                {point.error}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>

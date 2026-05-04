@@ -20,6 +20,7 @@ import { OwnerInventory } from './pages/OwnerInventory';
 import { AnalystAbnormalDrops } from './pages/AnalystAbnormalDrops';
 import { StaffOperations } from './pages/StaffOperations';
 import { DroppedStatus } from './pages/DroppedStatus';
+import { StaffSalesSummary } from './pages/StaffSalesSummary';
 
 // --- MAIN APP ---
 function App() {
@@ -116,6 +117,11 @@ function App() {
           <Route path="/staff/inventory" element={
             <ProtectedRoute roles={['STAFF']}>
               <OwnerInventory />
+             </ProtectedRoute>
+          } />
+          <Route path="/staff/sales-summary" element={
+            <ProtectedRoute roles={['STAFF']}>
+              <StaffSalesSummary />
             </ProtectedRoute>
           } />
           <Route path="/" element={<Navigate to="/login" />} />

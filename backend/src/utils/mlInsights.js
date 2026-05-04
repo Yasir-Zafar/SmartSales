@@ -138,7 +138,19 @@ export function staffActionFromInventoryRiskRow(row) {
   if (!product) return { headline: 'Review item', message: 'Check this product in inventory.' };
 
   const levelText = level === 'high' ? 'High risk' : level === 'medium' ? 'Medium risk' : 'Risk';
-  const volumeText = total != null ? `Expected demand is about ${Math.round(total)} units over 5 days.` : 'Expected demand is elevated.';
+  const rounded = total != null ? Math.round(total) : null;
+  const hasMeaningfulDemand = rounded != null && rounded >= 1;
+  const volumeText = hasMeaningfulDemand
+    ? `Expected demand is about ${rounded} units over 5 days.`
+    : 'Model demand signal is weak for this item right now.';
+
+  // Keep low-signal model output useful and non-alarming for staff.
+  if (!hasMeaningfulDemand) {
+    return {
+      headline: `${levelText}: monitor only`,
+      message: `Monitor ${product}; avoid urgent reorders for now. ${volumeText}`,
+    };
+  }
 
   if (cv != null && cv > 0.7) {
     return {
@@ -163,5 +175,22 @@ export function upsellMessageFromTopProducts(topProducts) {
   if (!first) return null;
   const name = typeof first === 'string' ? first.trim() : String(first.product).trim();
   return `Customers like this usually buy ${name}.`;
+}
+
+export function normalizeUpsellRecommendation(rawRecommendation, topProducts) {
+  const raw = typeof rawRecommendation === 'string' ? rawRecommendation.trim() : '';
+  const fallback = upsellMessageFromTopProducts(topProducts);
+
+  if (!raw) return fallback || null;
+
+  // Filter low-value or degenerate suggestions that can appear in model output.
+  const weakPatterns = [
+    /\bincrease by\s*0+(\.0+)?\s*units?\b/i,
+    /\bdecrease by\s*0+(\.0+)?\s*units?\b/i,
+    /\b0+(\.0+)?\s*units?\b/i,
+  ];
+  if (weakPatterns.some((re) => re.test(raw))) return fallback || null;
+
+  return raw;
 }
 

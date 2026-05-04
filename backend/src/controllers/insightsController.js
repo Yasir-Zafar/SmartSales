@@ -1,4 +1,4 @@
-import { getMlBaseUrl, loadMeta, getHistoricalMeanDaily, abnormalDropAlert, confidenceRating, trendDriverFromForecast, staffActionFromInventoryRiskRow, upsellMessageFromTopProducts } from '../utils/mlInsights.js';
+import { getMlBaseUrl, loadMeta, getHistoricalMeanDaily, abnormalDropAlert, confidenceRating, trendDriverFromForecast, staffActionFromInventoryRiskRow, normalizeUpsellRecommendation } from '../utils/mlInsights.js';
 import { appendAlertHistory, classifyAlertSeverity, getAlertHistory, getAlertThresholds, getLastAlertCount, resetAlertThreshold, setAlertThreshold, setLastAlertCount } from '../utils/alertingStore.js';
 import { sendOwnerAnomalyCountChangeEmail } from '../utils/ownerAlertMailer.js';
 import { supabaseAdmin } from '../config/db.js';
@@ -299,7 +299,9 @@ export async function staffInventoryRisk(req, res) {
         ensemble_total_5d: r.ensemble_total_5d,
         staff_action: staff,
       };
-    });
+    })
+      // Hide model-noise cards that recommend action for near-zero demand.
+      .filter((r) => Number(r.ensemble_total_5d || 0) >= 1);
 
     return res.json({ count: risks.length, risks });
   } catch (err) {
@@ -313,13 +315,13 @@ export async function staffCustomerUpsell(req, res) {
     if (!Number.isFinite(customerId)) return res.status(400).json({ message: 'Invalid customerId' });
 
     const seg = await mlGet(`/segments/${customerId}`);
-    const msg = upsellMessageFromTopProducts(seg?.top_products_for_segment);
+    const recommendation = normalizeUpsellRecommendation(seg?.recommendation, seg?.top_products_for_segment);
 
     return res.json({
       customer_id: seg.customer_id,
       segment_label: seg.segment_label,
-      recommendation: seg.recommendation,
-      upsell_message: msg,
+      recommendation,
+      upsell_message: recommendation,
       top_products_for_segment: seg.top_products_for_segment,
     });
   } catch (err) {
@@ -353,6 +355,60 @@ export async function ownerLatestForecasts(req, res) {
       run_batch_id: last.run_batch_id,
       created_at: last.created_at,
       products: rows || [],
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+export async function ownerLiveKpis(req, res) {
+  try {
+    const { data: latestSaleRow, error: latestSaleErr } = await supabaseAdmin
+      .from('daily_sales')
+      .select('sale_date')
+      .order('sale_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (latestSaleErr) return res.status(400).json({ message: latestSaleErr.message });
+
+    const anchor = latestSaleRow?.sale_date ? new Date(String(latestSaleRow.sale_date).split('T')[0]) : new Date();
+    const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1).toISOString().split('T')[0];
+    const monthEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).toISOString().split('T')[0];
+    const prevMonthStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1).toISOString().split('T')[0];
+    const prevMonthEnd = new Date(anchor.getFullYear(), anchor.getMonth(), 0).toISOString().split('T')[0];
+
+    const [{ data: allSales, error: allErr }, { data: currMonth, error: currErr }, { data: prevMonth, error: prevErr }, { data: latestUpload, error: uploadErr }] = await Promise.all([
+      supabaseAdmin.from('daily_sales').select('total_price, quantity, customer_id'),
+      supabaseAdmin.from('daily_sales').select('total_price').gte('sale_date', monthStart).lte('sale_date', monthEnd),
+      supabaseAdmin.from('daily_sales').select('total_price').gte('sale_date', prevMonthStart).lte('sale_date', prevMonthEnd),
+      supabaseAdmin.from('csv_uploads').select('created_at, upload_date').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+
+    const dbErr = allErr || currErr || prevErr || uploadErr;
+    if (dbErr) return res.status(400).json({ message: dbErr.message });
+
+    const totalRevenue = (allSales || []).reduce((sum, row) => sum + Number(row.total_price || 0), 0);
+    const totalSales = (allSales || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+    const activeCustomers = new Set((allSales || []).map((row) => row.customer_id).filter((id) => id != null)).size;
+    const currentMonthRevenue = (currMonth || []).reduce((sum, row) => sum + Number(row.total_price || 0), 0);
+    const previousMonthRevenue = (prevMonth || []).reduce((sum, row) => sum + Number(row.total_price || 0), 0);
+    const revenueChangePct = previousMonthRevenue > 0
+      ? Number((((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100).toFixed(1))
+      : null;
+
+    return res.json({
+      updated_at: new Date().toISOString(),
+      anchored_latest_sale_date: latestSaleRow?.sale_date || null,
+      latest_upload_at: latestUpload?.created_at || latestUpload?.upload_date || null,
+      kpis: {
+        total_revenue: Number(totalRevenue.toFixed(2)),
+        total_units_sold: totalSales,
+        active_customers: activeCustomers,
+        current_month_revenue: Number(currentMonthRevenue.toFixed(2)),
+        previous_month_revenue: Number(previousMonthRevenue.toFixed(2)),
+        revenue_change_pct: revenueChangePct,
+      },
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -497,18 +553,157 @@ export async function analystForecastSnapshots(req, res) {
   }
 }
 
+function toIsoDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().split('T')[0];
+}
+
+function buildDateRange(startIso, days) {
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return [];
+  return Array.from({ length: days }, (_, idx) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + idx);
+    return d.toISOString().split('T')[0];
+  });
+}
+
+export async function analystForecastVsActual(req, res) {
+  try {
+    const product = String(req.params.product || '').trim().toLowerCase();
+    if (!product) return res.status(400).json({ message: 'product required' });
+
+    const { data: latest, error: snapErr } = await supabaseAdmin
+      .from('ml_forecast_snapshots')
+      .select('created_at, forecast_start, forecast_end, ensemble_daily, ensemble_total_5d')
+      .eq('product_name', product)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (snapErr) return res.status(400).json({ message: snapErr.message });
+    if (!latest) return res.status(404).json({ message: `No forecast snapshot found for ${product}` });
+
+    const forecastDailyRaw = Array.isArray(latest.ensemble_daily) ? latest.ensemble_daily : [];
+    const forecastDaily = forecastDailyRaw
+      .map((v) => Number(v))
+      .filter((v) => Number.isFinite(v))
+      .slice(0, 5);
+
+    if (!forecastDaily.length) {
+      return res.status(422).json({ message: 'Snapshot missing usable daily forecast values' });
+    }
+
+    const forecastStart = toIsoDate(latest.forecast_start);
+    const dateRange = buildDateRange(forecastStart, forecastDaily.length);
+    if (!forecastStart || !dateRange.length) {
+      return res.status(422).json({ message: 'Snapshot has invalid forecast window' });
+    }
+    const forecastEnd = dateRange[dateRange.length - 1];
+
+    const { data: actualRows, error: actualErr } = await supabaseAdmin
+      .from('daily_sales')
+      .select('sale_date, quantity')
+      .ilike('product_name', product)
+      .gte('sale_date', forecastStart)
+      .lte('sale_date', forecastEnd);
+
+    if (actualErr) return res.status(400).json({ message: actualErr.message });
+
+    const actualByDate = {};
+    for (const row of actualRows || []) {
+      const d = toIsoDate(row.sale_date);
+      if (!d) continue;
+      actualByDate[d] = (actualByDate[d] || 0) + Number(row.quantity || 0);
+    }
+
+    const points = dateRange.map((date, idx) => {
+      const forecast = Number(forecastDaily[idx].toFixed(2));
+      const actual = Number((actualByDate[date] || 0).toFixed(2));
+      const error = Number((actual - forecast).toFixed(2));
+      return { date, forecast, actual, error };
+    });
+
+    const n = points.length;
+    const mae = n ? Number((points.reduce((s, p) => s + Math.abs(p.error), 0) / n).toFixed(3)) : null;
+    const rmse = n ? Number((Math.sqrt(points.reduce((s, p) => s + (p.error ** 2), 0) / n)).toFixed(3)) : null;
+    const mapeDenomCount = points.filter((p) => p.actual > 0).length;
+    const mape = mapeDenomCount
+      ? Number((
+        (points.filter((p) => p.actual > 0).reduce((s, p) => s + (Math.abs(p.error) / p.actual), 0) / mapeDenomCount) * 100
+      ).toFixed(2))
+      : null;
+
+    const totalForecast = Number(points.reduce((s, p) => s + p.forecast, 0).toFixed(2));
+    const totalActual = Number(points.reduce((s, p) => s + p.actual, 0).toFixed(2));
+
+    return res.json({
+      product,
+      snapshot_created_at: latest.created_at,
+      forecast_window: { start: forecastStart, end: forecastEnd, days: n },
+      totals: {
+        forecast: totalForecast,
+        actual: totalActual,
+        error: Number((totalActual - totalForecast).toFixed(2)),
+      },
+      metrics: { mae, rmse, mape_pct: mape },
+      points,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
 export async function staffSalesSummary(req, res) {
   try {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const normalizeSaleDate = (value) => {
+      if (!value) return null;
+      const raw = String(value).trim();
+      // Fast-path ISO date-like strings.
+      const isoLike = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (isoLike) return isoLike[1];
+      const d = new Date(raw);
+      if (!Number.isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      return null;
+    };
+
+    // Read a broad set of sale_date values and anchor by parsed max date.
+    const { data: dateRows, error: latestErr } = await supabaseAdmin
+      .from('daily_sales')
+      .select('sale_date')
+      .limit(50000);
+
+    if (latestErr) return res.status(400).json({ message: latestErr.message });
+    const parsedDates = (dateRows || [])
+      .map((r) => normalizeSaleDate(r.sale_date))
+      .filter(Boolean);
+
+    if (parsedDates.length === 0) {
+      return res.json({
+        source: { anchor_date: null, parsed_dates_count: 0, min_date: null, max_date: null },
+        today: { date: null, revenue: '0.00', transactions: 0, top_items: [] },
+        week: { start_date: null, end_date: null, revenue: '0.00', transactions: 0, dailyBreakdown: [], top_items: [] },
+      });
+    }
+
+    parsedDates.sort();
+    const todayIso = parsedDates[parsedDates.length - 1];
+    const todayStart = new Date(todayIso);
+    const nextDay = new Date(todayStart);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const nextDayIso = nextDay.toISOString().split('T')[0];
     const weekStart = new Date(todayStart);
-    weekStart.setDate(weekStart.getDate() - 7);
+    weekStart.setDate(weekStart.getDate() - 6);
+    const weekStartIso = weekStart.toISOString().split('T')[0];
 
     // Today's sales
     const { data: todayData, error: todayError } = await supabaseAdmin
       .from('daily_sales')
-      .select('total_price, quantity')
-      .gte('sale_date', todayStart.toISOString().split('T')[0]);
+      .select('total_price, quantity, product_name')
+      .gte('sale_date', todayIso)
+      .lt('sale_date', nextDayIso);
 
     if (todayError) return res.status(400).json({ message: todayError.message });
 
@@ -518,13 +713,38 @@ export async function staffSalesSummary(req, res) {
     // Week's sales
     const { data: weekData, error: weekError } = await supabaseAdmin
       .from('daily_sales')
-      .select('sale_date, total_price, quantity')
-      .gte('sale_date', weekStart.toISOString().split('T')[0]);
+      .select('sale_date, total_price, quantity, product_name')
+      .gte('sale_date', weekStartIso)
+      .lte('sale_date', todayIso);
 
     if (weekError) return res.status(400).json({ message: weekError.message });
 
     const weekRevenue = weekData.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
     const weekTransactions = weekData.length;
+
+    const aggregateTopItems = (rows, limit = 5) => {
+      const map = {};
+      for (const row of rows || []) {
+        const name = String(row.product_name || '').trim() || 'Unknown';
+        if (!map[name]) {
+          map[name] = { product_name: name, quantity: 0, revenue: 0 };
+        }
+        map[name].quantity += Number(row.quantity || 0);
+        map[name].revenue += Number(row.total_price || 0);
+      }
+      return Object.values(map)
+        // "Top sales items" should prioritize revenue first.
+        .sort((a, b) => b.revenue - a.revenue || b.quantity - a.quantity)
+        .slice(0, limit)
+        .map((item) => ({
+          product_name: item.product_name,
+          quantity: Number(item.quantity.toFixed(2)),
+          revenue: Number(item.revenue.toFixed(2)),
+        }));
+    };
+
+    const todayTopItems = aggregateTopItems(todayData, 5);
+    const weekTopItems = aggregateTopItems(weekData, 5);
 
     // Daily breakdown for the week
     const dailyBreakdown = {};
@@ -542,14 +762,25 @@ export async function staffSalesSummary(req, res) {
     );
 
     return res.json({
+      source: {
+        anchor_date: todayIso,
+        parsed_dates_count: parsedDates.length,
+        min_date: parsedDates[0],
+        max_date: parsedDates[parsedDates.length - 1],
+      },
       today: {
+        date: todayIso,
         revenue: todayRevenue.toFixed(2),
         transactions: todayTransactions,
+        top_items: todayTopItems,
       },
       week: {
+        start_date: weekStartIso,
+        end_date: todayIso,
         revenue: weekRevenue.toFixed(2),
         transactions: weekTransactions,
         dailyBreakdown: dailyArray,
+        top_items: weekTopItems,
       },
     });
   } catch (err) {

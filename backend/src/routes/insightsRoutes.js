@@ -3,9 +3,11 @@ import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 import {
   ownerAbnormalDrops,
   ownerLatestForecasts,
+  ownerLiveKpis,
   ownerForecasts,
   analystForecast,
   analystForecastSnapshots,
+  analystForecastVsActual,
   analystSegments,
   analystForecasts,
   analystAbnormalDrops,
@@ -33,11 +35,13 @@ router.delete('/owner/alerts/abnormal-drops/thresholds/:level', authenticateToke
 
 // Owner: latest persisted forecast batch (for charts / planning)
 router.get('/owner/forecasts/latest', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerLatestForecasts);
+router.get('/owner/kpis/live', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerLiveKpis);
 router.get('/owner/forecasts', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerForecasts);
 router.get('/owner/customer-segments', authenticateToken, authorizeRoles('OWNER', 'ADMIN'), ownerCustomerSegments);
 
 // Analyst: full forecast payload + metrics + derived trust/trend
 router.get('/analyst/forecast/:product', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystForecast);
+router.get('/analyst/forecast-vs-actual/:product', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystForecastVsActual);
 
 // Analyst: prior persisted runs for a product (compare forecast vs later actuals offline)
 router.get('/analyst/forecast/:product/snapshots', authenticateToken, authorizeRoles('ANALYST', 'ADMIN'), analystForecastSnapshots);

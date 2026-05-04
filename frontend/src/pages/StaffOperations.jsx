@@ -101,7 +101,7 @@ export const StaffOperations = () => {
 
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h4 className="text-sm text-gray-400">Today's Sales (Live)</h4>
+            <h4 className="text-sm text-gray-400">Latest Day Sales</h4>
             {sumLoading ? (
               <p className="text-gray-400 mt-2">Loading summary...</p>
             ) : sumError ? (
@@ -110,11 +110,12 @@ export const StaffOperations = () => {
               <>
                 <p className="text-2xl text-teal-400 mt-2">${today?.revenue}</p>
                 <p className="text-gray-500 text-sm">{today?.transactions} transactions</p>
+                {today?.date && <p className="text-gray-500 text-xs mt-1">Date: {today.date}</p>}
               </>
             )}
           </div>
           <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h4 className="text-sm text-gray-400">This Week (Live)</h4>
+            <h4 className="text-sm text-gray-400">Latest 7-Day Window</h4>
             {sumLoading ? (
               <p className="text-gray-400 mt-2">Loading summary...</p>
             ) : sumError ? (
@@ -123,6 +124,11 @@ export const StaffOperations = () => {
               <>
                 <p className="text-2xl text-purple-400 mt-2">${week?.revenue}</p>
                 <p className="text-gray-500 text-sm">{week?.transactions} transactions</p>
+                {week?.start_date && week?.end_date && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    Window: {week.start_date} to {week.end_date}
+                  </p>
+                )}
                 <WeekBarChart data={week?.dailyBreakdown || []} />
               </>
             )}
