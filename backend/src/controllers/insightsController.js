@@ -378,45 +378,27 @@ export async function ownerLiveKpis(req, res) {
     const prevMonthStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1).toISOString().split('T')[0];
     const prevMonthEnd = new Date(anchor.getFullYear(), anchor.getMonth(), 0).toISOString().split('T')[0];
 
-    const [{ data: allSales, error: allErr }, { data: currMonth, error: currErr }, { data: prevMonth, error: prevErr }, { data: latestUpload, error: uploadErr }, { data: products, error: prodErr }] = await Promise.all([
+    const [{ data: allSales, error: allErr }, { data: currMonth, error: currErr }, { data: prevMonth, error: prevErr }, { data: latestUpload, error: uploadErr }] = await Promise.all([
       supabaseAdmin.from('daily_sales').select('total_price, quantity, customer_id, product_id'),
       supabaseAdmin.from('daily_sales').select('total_price, quantity, product_id').gte('sale_date', monthStart).lte('sale_date', monthEnd),
       supabaseAdmin.from('daily_sales').select('total_price, quantity, product_id').gte('sale_date', prevMonthStart).lte('sale_date', prevMonthEnd),
       supabaseAdmin.from('csv_uploads').select('created_at, upload_date').order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      supabaseAdmin.from('products').select('id, cost_price'),
     ]);
 
-    const dbErr = allErr || currErr || prevErr || uploadErr || prodErr;
+    const dbErr = allErr || currErr || prevErr || uploadErr;
     if (dbErr) return res.status(400).json({ message: dbErr.message });
-
-    const costMap = {};
-    (products || []).forEach((p) => {
-      costMap[p.id] = Number(p.cost_price || 0);
-    });
 
     const totalRevenue = (allSales || []).reduce((sum, row) => sum + Number(row.total_price || 0), 0);
     const totalSales = (allSales || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
     const activeCustomers = new Set((allSales || []).map((row) => row.customer_id).filter((id) => id != null)).size;
-    const totalCost = (allSales || []).reduce((sum, row) => {
-      const cost = costMap[row.product_id] ?? 0;
-      return sum + cost * Number(row.quantity || 0);
-    }, 0);
-    const totalProfit = totalRevenue - totalCost;
-    const profitMarginPct = totalRevenue > 0 ? Number(((totalProfit / totalRevenue) * 100).toFixed(1)) : 0;
+    const totalProfit = 0;
+    const profitMarginPct = 0;
 
     const currentMonthRevenue = (currMonth || []).reduce((sum, row) => sum + Number(row.total_price || 0), 0);
-    const currentMonthCost = (currMonth || []).reduce((sum, row) => {
-      const cost = costMap[row.product_id] ?? 0;
-      return sum + cost * Number(row.quantity || 0);
-    }, 0);
-    const currentMonthProfit = currentMonthRevenue - currentMonthCost;
+    const currentMonthProfit = 0;
 
     const previousMonthRevenue = (prevMonth || []).reduce((sum, row) => sum + Number(row.total_price || 0), 0);
-    const previousMonthCost = (prevMonth || []).reduce((sum, row) => {
-      const cost = costMap[row.product_id] ?? 0;
-      return sum + cost * Number(row.quantity || 0);
-    }, 0);
-    const previousMonthProfit = previousMonthRevenue - previousMonthCost;
+    const previousMonthProfit = 0;
     const profitChangePct = previousMonthProfit !== 0
       ? Number((((currentMonthProfit - previousMonthProfit) / Math.abs(previousMonthProfit)) * 100).toFixed(1))
       : null;
@@ -544,7 +526,14 @@ export async function ownerCustomerSegments(req, res) {
         });
       } catch (err) {
         if (queryCustomerId != null) {
-    return res.status(err.status || 500).json({ message: err.message });
+          return res.status(err.status || 500).json({ message: err.message });
+        }
+      }
+    }
+
+    return res.json({ segments });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
 }
 
@@ -598,13 +587,6 @@ export async function resetOwnerRevenueThreshold(req, res) {
     return res.json(cfg);
   } catch (err) {
     return res.status(500).json({ message: err.message });
-  }
-}
-    }
-
-    return res.json({ count: segments.length, segments });
-  } catch (err) {
-    return res.status(err.status || 500).json({ message: err.message });
   }
 }
 

@@ -3,6 +3,8 @@
     "recency",
     "frequency",
     "monetary",
+    "avg_unit_price",
+    "avg_quantity",
     "unique_products",
     "unique_categories"
   ],
@@ -33,6 +35,8 @@
     "recency",
     "frequency",
     "monetary",
+    "avg_unit_price",
+    "avg_quantity",
     "unique_products",
     "unique_categories",
     "alcohol",

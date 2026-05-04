@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
+import { Users, CheckCircle, Ban, Crown } from 'lucide-react';
 import axios from 'axios';
 import { Navbar } from '../components/Navbar';
 
 const API_URL = 'http://localhost:5000/api';
 
 const roleBadge = (role) => {
-  if (role === 'OWNER') return 'bg-violet-500/10 text-violet-400 border border-violet-500/30';
-  if (role === 'ADMIN') return 'bg-blue-500/10 text-blue-400 border border-blue-500/30';
-  if (role === 'ANALYST') return 'bg-teal-500/10 text-teal-400 border border-teal-500/30';
-  if (role === 'STAFF') return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30';
-  return 'bg-gray-500/10 text-gray-400 border border-gray-500/30';
+  if (role === 'OWNER') return 'bg-accent/10 text-accent border border-accent/30';
+  if (role === 'ADMIN') return 'bg-accent/10 text-accent border border-accent/30';
+  if (role === 'ANALYST') return 'bg-success/10 text-success border border-success/30';
+  if (role === 'STAFF') return 'bg-success/10 text-success border border-success/30';
+  return 'bg-gray-500/10 text-text-muted border border-surface-600/30';
 };
 
 export const AdminViewUsers = () => {
@@ -56,79 +57,87 @@ export const AdminViewUsers = () => {
   }, {});
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-surface-900">
       <Navbar />
       <div className="p-8 max-w-7xl mx-auto w-full">
         <div className="mb-6">
-          <h2 className="text-3xl font-bold">View Users</h2>
-          <p className="text-gray-400 mt-1">Manage and review all system users with roles and activity status.</p>
+          <h2 className="text-3xl font-bold text-text-primary">View Users</h2>
+          <p className="text-text-muted mt-1">Manage and review all system users with roles and activity status.</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+          <div className="bg-surface-800 border border-accent/20 rounded-xl p-5">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">👥</span>
+              <div className="w-9 h-9 rounded-lg bg-surface-700 flex items-center justify-center text-accent">
+                <Users size={18} />
+              </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide">Total Users</p>
-                <p className="text-2xl font-bold text-gray-100">{users.length}</p>
+                <p className="text-xs text-text-muted uppercase tracking-wide">Total Users</p>
+                <p className="text-2xl font-bold text-text-primary">{users.length}</p>
               </div>
             </div>
           </div>
-          <div className="bg-gray-800 border border-teal-500/20 rounded-xl p-5">
+          <div className="bg-surface-800 border border-success/20 rounded-xl p-5">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">✅</span>
+              <div className="w-9 h-9 rounded-lg bg-surface-700 flex items-center justify-center text-success">
+                <CheckCircle size={18} />
+              </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide">Active</p>
-                <p className="text-2xl font-bold text-gray-100">{activeCount}</p>
+                <p className="text-xs text-text-muted uppercase tracking-wide">Active</p>
+                <p className="text-2xl font-bold text-text-primary">{activeCount}</p>
               </div>
             </div>
           </div>
-          <div className="bg-gray-800 border border-red-500/20 rounded-xl p-5">
+          <div className="bg-surface-800 border border-danger/20 rounded-xl p-5">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">🚫</span>
+              <div className="w-9 h-9 rounded-lg bg-surface-700 flex items-center justify-center text-danger">
+                <Ban size={18} />
+              </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide">Deactivated</p>
-                <p className="text-2xl font-bold text-gray-100">{deactivatedCount}</p>
+                <p className="text-xs text-text-muted uppercase tracking-wide">Deactivated</p>
+                <p className="text-2xl font-bold text-text-primary">{deactivatedCount}</p>
               </div>
             </div>
           </div>
-          <div className="bg-gray-800 border border-violet-500/20 rounded-xl p-5">
+          <div className="bg-surface-800 border border-accent/20 rounded-xl p-5">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">👑</span>
+              <div className="w-9 h-9 rounded-lg bg-surface-700 flex items-center justify-center text-accent">
+                <Crown size={18} />
+              </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide">Owners</p>
-                <p className="text-2xl font-bold text-gray-100">{roleCounts.OWNER || 0}</p>
+                <p className="text-xs text-text-muted uppercase tracking-wide">Owners</p>
+                <p className="text-2xl font-bold text-text-primary">{roleCounts.OWNER || 0}</p>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-700">
-            <label htmlFor="user-search" className="text-xs text-gray-500 mb-2 block">Search users</label>
+        <div className="bg-surface-800 border border-surface-700 rounded-xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-surface-700">
+            <label htmlFor="user-search" className="text-xs text-text-faint mb-2 block">Search users</label>
             <input
               id="user-search"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by email, name, or role..."
-              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:border-teal-500 focus:outline-none"
+              className="w-full bg-surface-900 border border-surface-700 rounded-lg px-4 py-2 text-sm focus:border-accent-border focus:outline-none"
             />
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12 text-gray-500">
-              <div className="animate-spin w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full mr-3"></div>
+            <div className="flex items-center justify-center py-12 text-text-faint">
+              <div className="animate-spin w-6 h-6 border-2 border-accent border-t-transparent rounded-full mr-3"></div>
               Loading users...
             </div>
           ) : error ? (
-            <div className="p-6 text-rose-300 bg-red-900/10">{error}</div>
+            <div className="p-6 text-danger bg-danger/10">{error}</div>
           ) : filteredUsers.length === 0 ? (
-            <div className="p-6 text-gray-500 text-center">No users found.</div>
+            <div className="p-6 text-text-faint text-center">No users found.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-900/60 text-xs uppercase tracking-wide text-gray-400">
+                <thead className="bg-surface-900/60 text-xs uppercase tracking-wide text-text-muted">
                   <tr>
                     <th className="px-6 py-3 text-left">Email</th>
                     <th className="px-6 py-3 text-left">Name</th>
@@ -137,23 +146,23 @@ export const AdminViewUsers = () => {
                     <th className="px-6 py-3 text-left">Last Login</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-800">
+                <tbody className="divide-y divide-surface-700">
                   {filteredUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-gray-800/50">
-                      <td className="px-6 py-3 text-gray-200 font-medium">{u.email}</td>
-                      <td className="px-6 py-3 text-gray-300">{u.name || '—'}</td>
+                    <tr key={u.id} className="hover:bg-surface-800/50">
+                      <td className="px-6 py-3 text-text-primary font-medium">{u.email}</td>
+                      <td className="px-6 py-3 text-text-secondary">{u.name || '—'}</td>
                       <td className="px-6 py-3">
                         <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${roleBadge(u.role)}`}>
                           {u.role}
                         </span>
                       </td>
                       <td className="px-6 py-3">
-                        <span className={`inline-flex items-center gap-1.5 ${u.active ? 'text-teal-400' : 'text-rose-400'}`}>
-                          <span className={`w-2 h-2 rounded-full ${u.active ? 'bg-teal-400' : 'bg-rose-400'}`}></span>
+                        <span className={`inline-flex items-center gap-1.5 ${u.active ? 'text-success' : 'text-danger'}`}>
+                          <span className={`w-2 h-2 rounded-full ${u.active ? 'bg-success' : 'bg-danger'}`}></span>
                           {u.active ? 'Active' : 'Deactivated'}
                         </span>
                       </td>
-                      <td className="px-6 py-3 text-gray-400 text-sm">
+                      <td className="px-6 py-3 text-text-muted text-sm">
                         {u.last_logged_in ? new Date(u.last_logged_in).toLocaleString() : 'Never'}
                       </td>
                     </tr>
