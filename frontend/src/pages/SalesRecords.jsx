@@ -63,6 +63,10 @@ export const SalesRecords = () => {
     setFilter((prev) => [...prev, '']);
   };
 
+  const removeFilterRow = (setFilter, index) => {
+    setFilter((prev) => prev.length > 1 ? prev.filter((_, i) => i !== index) : prev);
+  };
+
   const csvEscape = (value) => {
     const str = value == null ? '' : String(value);
     if (str.includes('"') || str.includes(',') || str.includes('\n')) {
@@ -110,24 +114,27 @@ export const SalesRecords = () => {
     URL.revokeObjectURL(url);
   };
 
+  const totalRevenue = records.reduce((s, r) => s + parseFloat(r.total_price || 0), 0);
+  const totalUnits = records.reduce((s, r) => s + (r.quantity || 0), 0);
+  const uniqueTxns = new Set(records.map((r) => r.transaction_id)).size;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <Navbar />
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
           <div>
             <h2 className="text-3xl font-bold">Sales Records</h2>
-            <p className="text-gray-300 mt-1">Data from your daily_sales table. Filter by product, category, transaction, and date.</p>
-            <p className="text-gray-400 text-sm mt-1">Logged in as: <span className="font-semibold text-teal-300">{user?.email}</span></p>
+            <p className="text-gray-400 mt-1">Query and export filtered sales data from your daily_sales table.</p>
+            <p className="text-gray-500 text-sm mt-1">Logged in as <span className="text-teal-400">{user?.email}</span></p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-2">
-              <label className="text-xs text-gray-400">Sort by</label>
+          <div className="flex items-center gap-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Sort By</label>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="mt-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm"
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
               >
                 <option value="time">Time</option>
                 <option value="name">Product Name</option>
@@ -135,103 +142,136 @@ export const SalesRecords = () => {
                 <option value="sales">Total Price</option>
               </select>
             </div>
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-2">
-              <label className="text-xs text-gray-400">Order</label>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Order</label>
               <select
                 value={order}
                 onChange={(e) => setOrder(e.target.value)}
-                className="mt-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm"
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
               >
-                <option value="desc">Desc</option>
-                <option value="asc">Asc</option>
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
               </select>
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleApply} className="mt-4 space-y-3">
-          <div className="bg-gray-800 border border-gray-700 rounded-md p-3">
-            <p className="text-gray-300 text-sm">Use filters below and click Apply filters to query sales records.</p>
+        {records.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {[
+              { label: 'Records', value: records.length.toLocaleString(), icon: '📋' },
+              { label: 'Revenue', value: `$${totalRevenue.toFixed(2)}`, icon: '💰' },
+              { label: 'Units Sold', value: totalUnits.toLocaleString(), icon: '📦' },
+              { label: 'Transactions', value: uniqueTxns.toLocaleString(), icon: '🧾' },
+            ].map((card) => (
+              <div key={card.label} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{card.icon}</span>
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase">{card.label}</p>
+                    <p className="text-lg font-bold text-gray-100">{card.value}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={handleApply} className="space-y-4 mb-6">
+          <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">Filters</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm text-gray-400">Product</label>
+                {productFilters.map((value, idx) => (
+                  <div key={`product-${idx}`} className="flex gap-2">
+                    <input
+                      value={value}
+                      onChange={(e) => updateFilterValue(setProductFilters, idx, e.target.value)}
+                      placeholder="Product name..."
+                      className="flex-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                    {productFilters.length > 1 && (
+                      <button type="button" onClick={() => removeFilterRow(setProductFilters, idx)} className="text-gray-500 hover:text-red-400 px-2 text-lg leading-5">
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => addFilterRow(setProductFilters)} className="text-xs text-teal-400 hover:text-teal-300">+ Add product filter</button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm text-gray-400">Category</label>
+                {categoryFilters.map((value, idx) => (
+                  <div key={`category-${idx}`} className="flex gap-2">
+                    <input
+                      value={value}
+                      onChange={(e) => updateFilterValue(setCategoryFilters, idx, e.target.value)}
+                      placeholder="Category..."
+                      className="flex-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                    {categoryFilters.length > 1 && (
+                      <button type="button" onClick={() => removeFilterRow(setCategoryFilters, idx)} className="text-gray-500 hover:text-red-400 px-2 text-lg leading-5">
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => addFilterRow(setCategoryFilters)} className="text-xs text-teal-400 hover:text-teal-300">+ Add category filter</button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm text-gray-400">Transaction ID</label>
+                {transactionFilters.map((value, idx) => (
+                  <div key={`tx-${idx}`} className="flex gap-2">
+                    <input
+                      value={value}
+                      onChange={(e) => updateFilterValue(setTransactionFilters, idx, e.target.value)}
+                      placeholder="Transaction ID..."
+                      className="flex-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                    {transactionFilters.length > 1 && (
+                      <button type="button" onClick={() => removeFilterRow(setTransactionFilters, idx)} className="text-gray-500 hover:text-red-400 px-2 text-lg leading-5">
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => addFilterRow(setTransactionFilters)} className="text-xs text-teal-400 hover:text-teal-300">+ Add transaction filter</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm text-gray-400">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full mt-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full mt-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-gray-300">Product</label>
-                <button type="button" onClick={() => addFilterRow(setProductFilters)} className="text-xs text-teal-300">+ Add</button>
-              </div>
-              {productFilters.map((value, idx) => (
-                <input
-                  key={`product-${idx}`}
-                  value={value}
-                  onChange={(e) => updateFilterValue(setProductFilters, idx, e.target.value)}
-                  placeholder={`Product filter #${idx + 1}`}
-                  className="w-full mb-1 border border-gray-700 rounded-md px-3 py-2 bg-gray-800 text-white"
-                />
-              ))}
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-gray-300">Category</label>
-                <button type="button" onClick={() => addFilterRow(setCategoryFilters)} className="text-xs text-teal-300">+ Add</button>
-              </div>
-              {categoryFilters.map((value, idx) => (
-                <input
-                  key={`category-${idx}`}
-                  value={value}
-                  onChange={(e) => updateFilterValue(setCategoryFilters, idx, e.target.value)}
-                  placeholder={`Category filter #${idx + 1}`}
-                  className="w-full mb-1 border border-gray-700 rounded-md px-3 py-2 bg-gray-800 text-white"
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-gray-300">Transaction ID</label>
-                <button type="button" onClick={() => addFilterRow(setTransactionFilters)} className="text-xs text-teal-300">+ Add</button>
-              </div>
-              {transactionFilters.map((value, idx) => (
-                <input
-                  key={`tx-${idx}`}
-                  value={value}
-                  onChange={(e) => updateFilterValue(setTransactionFilters, idx, e.target.value)}
-                  placeholder={`Transaction ID #${idx + 1}`}
-                  className="w-full mb-1 border border-gray-700 rounded-md px-3 py-2 bg-gray-800 text-white"
-                />
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm text-gray-300">Start date</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full mt-1 border border-gray-700 rounded-md px-3 py-2 bg-gray-800 text-white"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-gray-300">End date</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full mt-1 border border-gray-700 rounded-md px-3 py-2 bg-gray-800 text-white"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-3 flex-wrap">
             <button
               type="submit"
-              className="bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-4 py-2 transition"
+              className="bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-lg px-6 py-2 transition"
             >
-              Apply filters
+              Apply Filters
             </button>
             <button
               type="button"
@@ -243,7 +283,7 @@ export const SalesRecords = () => {
                 setEndDate('');
                 fetchSales();
               }}
-              className="bg-gray-700 hover:bg-gray-600 text-white rounded-md px-4 py-2 transition"
+              className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-6 py-2 transition"
             >
               Reset
             </button>
@@ -251,52 +291,54 @@ export const SalesRecords = () => {
               type="button"
               onClick={handleExportCsv}
               disabled={!records.length}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md px-4 py-2 transition"
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg px-6 py-2 transition"
             >
-              Export filtered CSV
+              Export CSV
             </button>
           </div>
         </form>
 
-        <div className="mt-4">
-          {error && <div className="text-red-400 mb-2">{error}</div>}
-          {loading ? (
-            <div className="p-4 bg-gray-800 rounded-md">Loading records...</div>
-          ) : (
-            <div className="overflow-x-auto bg-gray-800 rounded-lg border border-gray-700 mt-2">
-              <table className="min-w-full divide-y divide-gray-700">
-                <thead className="bg-gray-900 text-left text-xs uppercase tracking-wide text-gray-300">
+        {error && <div className="bg-red-900/20 border border-red-700/50 text-red-300 px-4 py-3 rounded-lg mb-4">{error}</div>}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12 bg-gray-800 rounded-xl text-gray-500">
+            <div className="animate-spin w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full mr-3"></div>
+            Loading records...
+          </div>
+        ) : (
+          <div className="overflow-x-auto bg-gray-800 rounded-xl border border-gray-700">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-900/60 text-left text-xs uppercase tracking-wide text-gray-400">
+                <tr>
+                  <th className="px-6 py-3">Date</th>
+                  <th className="px-6 py-3">Transaction</th>
+                  <th className="px-6 py-3">Product</th>
+                  <th className="px-6 py-3">Category</th>
+                  <th className="px-6 py-3">Qty</th>
+                  <th className="px-6 py-3">Unit Price</th>
+                  <th className="px-6 py-3">Total Price</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800">
+                {!records.length ? (
                   <tr>
-                    <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2">Transaction</th>
-                    <th className="px-3 py-2">Product</th>
-                    <th className="px-3 py-2">Category</th>
-                    <th className="px-3 py-2">Qty</th>
-                    <th className="px-3 py-2">Unit Price</th>
-                    <th className="px-3 py-2">Total Price</th>
+                    <td colSpan="7" className="px-6 py-8 text-center text-gray-500">No records found.</td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {!records.length ? (
-                    <tr>
-                      <td colSpan="7" className="px-3 py-4 text-gray-400">No records found.</td>
-                    </tr>
-                  ) : records.map((r) => (
-                    <tr key={`${r.transaction_id}-${r.sale_date}-${r.product_id}`} className="hover:bg-gray-700/30">
-                      <td className="px-3 py-2 text-sm">{r.sale_date || 'N/A'}</td>
-                      <td className="px-3 py-2 text-sm">{r.transaction_id || 'N/A'}</td>
-                      <td className="px-3 py-2 text-sm">{r.product_name || 'N/A'}</td>
-                      <td className="px-3 py-2 text-sm">{r.category || 'N/A'}</td>
-                      <td className="px-3 py-2 text-sm">{r.quantity ?? '-'}</td>
-                      <td className="px-3 py-2 text-sm">${parseFloat(r.unit_price || 0).toFixed(2)}</td>
-                      <td className="px-3 py-2 text-sm">${parseFloat(r.total_price || 0).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                ) : records.map((r) => (
+                  <tr key={`${r.transaction_id}-${r.sale_date}-${r.product_id}`} className="hover:bg-gray-800/50">
+                    <td className="px-6 py-3 text-sm text-gray-300">{r.sale_date || 'N/A'}</td>
+                    <td className="px-6 py-3 text-sm text-gray-400 font-mono text-xs">{r.transaction_id || 'N/A'}</td>
+                    <td className="px-6 py-3 text-sm text-gray-200 font-medium">{r.product_name || 'N/A'}</td>
+                    <td className="px-6 py-3 text-sm text-gray-400">{r.category || 'N/A'}</td>
+                    <td className="px-6 py-3 text-sm text-gray-300">{r.quantity ?? '-'}</td>
+                    <td className="px-6 py-3 text-sm text-gray-300">${parseFloat(r.unit_price || 0).toFixed(2)}</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-teal-400">${parseFloat(r.total_price || 0).toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

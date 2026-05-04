@@ -30,6 +30,10 @@ export const CompareTimePeriods = () => {
     setFilter((prev) => [...prev, '']);
   };
 
+  const removeFilterRow = (setFilter, index) => {
+    setFilter((prev) => prev.length > 1 ? prev.filter((_, i) => i !== index) : prev);
+  };
+
   const fetchPeriod = async (startDate, endDate) => {
     const token = localStorage.getItem('token');
     const response = await axios.get(`${API_URL}/csv/records`, {
@@ -85,10 +89,42 @@ export const CompareTimePeriods = () => {
     setError('');
   };
 
-  const renderRecordsTable = (records) => (
-    <div className="overflow-x-auto bg-gray-800 rounded-lg border border-gray-700 mt-2">
+  const computeSummary = (records) => {
+    const totalRevenue = records.reduce((s, r) => s + parseFloat(r.total_price || 0), 0);
+    const totalQty = records.reduce((s, r) => s + (r.quantity || 0), 0);
+    const uniqueTxns = new Set(records.map((r) => r.transaction_id)).size;
+    const uniqueProducts = new Set(records.map((r) => r.product_name)).size;
+    return { totalRevenue, totalQty, uniqueTxns, uniqueProducts, count: records.length };
+  };
+
+  const leftSummary = computeSummary(leftRecords);
+  const rightSummary = computeSummary(rightRecords);
+
+  const renderSummaryCards = (summary, label, accent) => (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+      {[
+        { icon: '💰', title: 'Revenue', value: `$${summary.totalRevenue.toFixed(2)}` },
+        { icon: '📦', title: 'Units Sold', value: summary.totalQty.toLocaleString() },
+        { icon: '🧾', title: 'Transactions', value: summary.uniqueTxns.toLocaleString() },
+        { icon: '🏷️', title: 'Products', value: summary.uniqueProducts.toLocaleString() },
+      ].map((card) => (
+        <div key={card.title} className={`bg-gray-900/60 border rounded-lg p-3 ${accent === 'left' ? 'border-teal-500/30' : 'border-violet-500/30'}`}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{card.icon}</span>
+            <div>
+              <p className="text-xs text-gray-400 uppercase">{card.title}</p>
+              <p className="text-lg font-bold text-gray-100">{card.value}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderRecordsTable = (records, accent) => (
+    <div className="overflow-x-auto bg-gray-900/60 rounded-lg border border-gray-700 mt-3">
       <table className="min-w-full divide-y divide-gray-700">
-        <thead className="bg-gray-900 text-left text-xs uppercase tracking-wide text-gray-300">
+        <thead className="bg-gray-800 text-left text-xs uppercase tracking-wide text-gray-400">
           <tr>
             <th className="px-3 py-2">Date</th>
             <th className="px-3 py-2">Txn</th>
@@ -98,20 +134,20 @@ export const CompareTimePeriods = () => {
             <th className="px-3 py-2">Total</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-700">
+        <tbody className="divide-y divide-gray-800">
           {!records.length ? (
             <tr>
-              <td colSpan="6" className="px-3 py-4 text-gray-400">No records found.</td>
+              <td colSpan="6" className="px-3 py-6 text-center text-gray-500">No records found.</td>
             </tr>
           ) : (
             records.map((r, idx) => (
-              <tr key={`${r.transaction_id}-${r.sale_date}-${idx}`} className="hover:bg-gray-700/30">
-                <td className="px-3 py-2 text-sm">{r.sale_date || 'N/A'}</td>
-                <td className="px-3 py-2 text-sm">{r.transaction_id || 'N/A'}</td>
-                <td className="px-3 py-2 text-sm">{r.product_name || 'N/A'}</td>
-                <td className="px-3 py-2 text-sm">{r.category || 'N/A'}</td>
-                <td className="px-3 py-2 text-sm">{r.quantity ?? '-'}</td>
-                <td className="px-3 py-2 text-sm">${parseFloat(r.total_price || 0).toFixed(2)}</td>
+              <tr key={`${r.transaction_id}-${r.sale_date}-${idx}`} className="hover:bg-gray-800/50">
+                <td className="px-3 py-2 text-sm text-gray-300">{r.sale_date || 'N/A'}</td>
+                <td className="px-3 py-2 text-sm text-gray-400 font-mono text-xs">{r.transaction_id || 'N/A'}</td>
+                <td className="px-3 py-2 text-sm text-gray-200">{r.product_name || 'N/A'}</td>
+                <td className="px-3 py-2 text-sm text-gray-400">{r.category || 'N/A'}</td>
+                <td className="px-3 py-2 text-sm text-gray-300">{r.quantity ?? '-'}</td>
+                <td className={`px-3 py-2 text-sm font-semibold ${accent === 'left' ? 'text-teal-400' : 'text-violet-400'}`}>${parseFloat(r.total_price || 0).toFixed(2)}</td>
               </tr>
             ))
           )}
@@ -123,121 +159,178 @@ export const CompareTimePeriods = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <Navbar />
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="mb-4">
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="mb-6">
           <h2 className="text-3xl font-bold">Compare Time Periods</h2>
-          <p className="text-gray-300 mt-1">Select two period ranges, then apply filters to compare sales side by side.</p>
-          <p className="text-gray-400 text-sm mt-1">Logged in as: <span className="font-semibold text-teal-300">{user?.email}</span></p>
+          <p className="text-gray-400 mt-1">Select two date ranges, apply filters, and compare sales side by side.</p>
+          <p className="text-gray-500 text-sm mt-1">Logged in as <span className="text-teal-400">{user?.email}</span></p>
         </div>
 
-        {error && <div className="text-rose-300 bg-red-900/20 border border-red-700 p-2 rounded mb-3">{error}</div>}
+        {error && (
+          <div className="bg-red-900/20 border border-red-700/50 text-red-300 px-4 py-3 rounded-lg mb-4">
+            {error}
+          </div>
+        )}
 
-        <form onSubmit={handleCompare} className="space-y-4 bg-gray-800 border border-gray-700 rounded-md p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-gray-900 p-3 rounded-md">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-200">Period A</p>
+        <form onSubmit={handleCompare} className="space-y-4">
+          <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">Date Ranges</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-900/60 border border-teal-500/20 rounded-lg p-4">
+                <p className="text-sm font-semibold text-teal-400 mb-3">Period A</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Start Date</label>
+                    <input type="date" value={leftStartDate} onChange={(e) => setLeftStartDate(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">End Date</label>
+                    <input type="date" value={leftEndDate} onChange={(e) => setLeftEndDate(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none" />
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-xs text-gray-300">Start</label>
-                <label className="text-xs text-gray-300">End</label>
-                <input type="date" value={leftStartDate} onChange={(e) => setLeftStartDate(e.target.value)} className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm" />
-                <input type="date" value={leftEndDate} onChange={(e) => setLeftEndDate(e.target.value)} className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm" />
-              </div>
-            </div>
 
-            <div className="bg-gray-900 p-3 rounded-md">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm text-gray-200">Period B</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-xs text-gray-300">Start</label>
-                <label className="text-xs text-gray-300">End</label>
-                <input type="date" value={rightStartDate} onChange={(e) => setRightStartDate(e.target.value)} className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm" />
-                <input type="date" value={rightEndDate} onChange={(e) => setRightEndDate(e.target.value)} className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm" />
+              <div className="bg-gray-900/60 border border-violet-500/20 rounded-lg p-4">
+                <p className="text-sm font-semibold text-violet-400 mb-3">Period B</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Start Date</label>
+                    <input type="date" value={rightStartDate} onChange={(e) => setRightStartDate(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">End Date</label>
+                    <input type="date" value={rightEndDate} onChange={(e) => setRightEndDate(e.target.value)} className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-violet-500 focus:outline-none" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-gray-900 p-3 rounded-md">
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-gray-300">Product</label>
-                <button type="button" onClick={() => addFilterRow(setProductFilters)} className="text-xs text-teal-300">+ Add</button>
+          <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">Filters</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm text-gray-400">Product</label>
+                {productFilters.map((value, idx) => (
+                  <div key={`product-${idx}`} className="flex gap-2">
+                    <input
+                      value={value}
+                      onChange={(e) => updateFilterValue(setProductFilters, idx, e.target.value)}
+                      placeholder="Product name..."
+                      className="flex-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                    {productFilters.length > 1 && (
+                      <button type="button" onClick={() => removeFilterRow(setProductFilters, idx)} className="text-gray-500 hover:text-red-400 px-2 text-lg leading-5">
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => addFilterRow(setProductFilters)} className="text-xs text-teal-400 hover:text-teal-300">+ Add product filter</button>
               </div>
-              {productFilters.map((value, idx) => (
-                <input
-                  key={`product-${idx}`}
-                  value={value}
-                  onChange={(e) => updateFilterValue(setProductFilters, idx, e.target.value)}
-                  placeholder={`Product filter #${idx + 1}`}
-                  className="w-full mb-1 border border-gray-700 rounded-md px-2 py-1 bg-gray-800 text-white text-sm"
-                />
+
+              <div className="space-y-2">
+                <label className="text-sm text-gray-400">Category</label>
+                {categoryFilters.map((value, idx) => (
+                  <div key={`category-${idx}`} className="flex gap-2">
+                    <input
+                      value={value}
+                      onChange={(e) => updateFilterValue(setCategoryFilters, idx, e.target.value)}
+                      placeholder="Category..."
+                      className="flex-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                    />
+                    {categoryFilters.length > 1 && (
+                      <button type="button" onClick={() => removeFilterRow(setCategoryFilters, idx)} className="text-gray-500 hover:text-red-400 px-2 text-lg leading-5">
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => addFilterRow(setCategoryFilters)} className="text-xs text-teal-400 hover:text-teal-300">+ Add category filter</button>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <label className="text-sm text-gray-400">Transaction ID</label>
+              {transactionFilters.map((value, idx) => (
+                <div key={`transaction-${idx}`} className="flex gap-2">
+                  <input
+                    value={value}
+                    onChange={(e) => updateFilterValue(setTransactionFilters, idx, e.target.value)}
+                    placeholder="Transaction ID..."
+                    className="flex-1 bg-gray-900/60 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                  />
+                  {transactionFilters.length > 1 && (
+                    <button type="button" onClick={() => removeFilterRow(setTransactionFilters, idx)} className="text-gray-500 hover:text-red-400 px-2 text-lg leading-5">
+                      ×
+                    </button>
+                  )}
+                </div>
               ))}
+              <button type="button" onClick={() => addFilterRow(setTransactionFilters)} className="text-xs text-teal-400 hover:text-teal-300">+ Add transaction filter</button>
             </div>
-            <div className="bg-gray-900 p-3 rounded-md">
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm text-gray-300">Category</label>
-                <button type="button" onClick={() => addFilterRow(setCategoryFilters)} className="text-xs text-teal-300">+ Add</button>
+          </div>
+
+          <div className="bg-gray-800/80 border border-gray-700 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">Sort & Actions</h3>
+            <div className="flex flex-wrap gap-3 items-center">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Sort By</label>
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none">
+                  <option value="time">Time</option>
+                  <option value="name">Product Name</option>
+                  <option value="price">Total Price</option>
+                  <option value="sales">Total Price</option>
+                </select>
               </div>
-              {categoryFilters.map((value, idx) => (
-                <input
-                  key={`category-${idx}`}
-                  value={value}
-                  onChange={(e) => updateFilterValue(setCategoryFilters, idx, e.target.value)}
-                  placeholder={`Category filter #${idx + 1}`}
-                  className="w-full mb-1 border border-gray-700 rounded-md px-2 py-1 bg-gray-800 text-white text-sm"
-                />
-              ))}
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Order</label>
+                <select value={order} onChange={(e) => setOrder(e.target.value)} className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:border-teal-500 focus:outline-none">
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </select>
+              </div>
+              <button type="submit" className="bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-lg px-6 py-2 transition mt-4">Compare</button>
+              <button type="button" onClick={handleReset} className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-6 py-2 transition mt-4">Reset</button>
             </div>
-          </div>
-
-          <div className="bg-gray-900 p-3 rounded-md">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-gray-300">Transaction ID</label>
-              <button type="button" onClick={() => addFilterRow(setTransactionFilters)} className="text-xs text-teal-300">+ Add</button>
-            </div>
-            {transactionFilters.map((value, idx) => (
-              <input
-                key={`transaction-${idx}`}
-                value={value}
-                onChange={(e) => updateFilterValue(setTransactionFilters, idx, e.target.value)}
-                placeholder={`Transaction ID #${idx + 1}`}
-                className="w-full mb-1 border border-gray-700 rounded-md px-2 py-1 bg-gray-800 text-white text-sm"
-              />
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <div className="bg-gray-800 border border-gray-700 rounded p-2">
-              <label className="text-xs text-gray-400">Sort by</label>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="mt-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm">
-                <option value="time">Time</option>
-                <option value="name">Product Name</option>
-                <option value="price">Total Price</option>
-                <option value="sales">Total Price</option>
-              </select>
-            </div>
-            <div className="bg-gray-800 border border-gray-700 rounded p-2">
-              <label className="text-xs text-gray-400">Order</label>
-              <select value={order} onChange={(e) => setOrder(e.target.value)} className="mt-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm">
-                <option value="desc">Desc</option>
-                <option value="asc">Asc</option>
-              </select>
-            </div>
-            <button type="submit" className="bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded px-4 py-2">Compare</button>
-            <button type="button" onClick={handleReset} className="bg-gray-700 hover:bg-gray-600 text-white rounded px-4 py-2">Reset</button>
           </div>
         </form>
 
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-gray-800 border border-gray-700 rounded p-3">
-            <h3 className="text-sm font-semibold text-gray-200">Period A ({leftStartDate || 'none'} to {leftEndDate || 'none'})</h3>
-            {loading ? <p className="text-gray-300">Loading...</p> : renderRecordsTable(leftRecords)}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-gray-800/80 border border-teal-500/20 rounded-xl p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-teal-400">Period A</h3>
+              <span className="text-xs text-gray-500">{leftStartDate || '—'} to {leftEndDate || '—'}</span>
+            </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-12 text-gray-500">
+                <div className="animate-spin w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full mr-3"></div>
+                Loading...
+              </div>
+            ) : (
+              <>
+                {leftRecords.length > 0 && renderSummaryCards(leftSummary, 'left')}
+                {renderRecordsTable(leftRecords, 'left')}
+              </>
+            )}
           </div>
-          <div className="bg-gray-800 border border-gray-700 rounded p-3">
-            <h3 className="text-sm font-semibold text-gray-200">Period B ({rightStartDate || 'none'} to {rightEndDate || 'none'})</h3>
-            {loading ? <p className="text-gray-300">Loading...</p> : renderRecordsTable(rightRecords)}
+
+          <div className="bg-gray-800/80 border border-violet-500/20 rounded-xl p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-violet-400">Period B</h3>
+              <span className="text-xs text-gray-500">{rightStartDate || '—'} to {rightEndDate || '—'}</span>
+            </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-12 text-gray-500">
+                <div className="animate-spin w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full mr-3"></div>
+                Loading...
+              </div>
+            ) : (
+              <>
+                {rightRecords.length > 0 && renderSummaryCards(rightSummary, 'right')}
+                {renderRecordsTable(rightRecords, 'right')}
+              </>
+            )}
           </div>
         </div>
       </div>
