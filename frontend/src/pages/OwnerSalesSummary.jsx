@@ -100,25 +100,25 @@ export const OwnerSalesSummary = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-surface-900 text-white">
       <Navbar />
       <div className="max-w-6xl mx-auto p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <h2 className="text-3xl font-bold">Sales Summary</h2>
-            <p className="text-gray-300 mt-1">Owner-only sales summary. Select a category and optionally restrict by date range.</p>
-            <p className="text-gray-400 text-sm mt-1">Logged in as: <span className="font-semibold text-teal-300">{user?.email}</span></p>
+            <p className="text-text-secondary mt-1">Owner-only sales summary. Select a category and optionally restrict by date range.</p>
+            <p className="text-text-muted text-sm mt-1">Logged in as: <span className="font-semibold text-accent">{user?.email}</span></p>
           </div>
         </div>
 
         <form className="mt-6 space-y-4" onSubmit={handleApply}>
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 space-y-4">
+          <div className="bg-surface-800 border border-surface-700 rounded-xl p-5 space-y-4">
             <div>
-              <label className="block text-sm text-gray-300 mb-1">Category <span className="text-rose-400">*</span></label>
+              <label className="block text-sm text-text-secondary mb-1">Category <span className="text-danger">*</span></label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full border border-gray-700 rounded-md px-3 py-2 bg-gray-900 text-white"
+                className="w-full border border-surface-700 rounded-md px-3 py-2 bg-surface-900 text-white"
                 required
               >
                 <option value="">Select a category</option>
@@ -126,26 +126,26 @@ export const OwnerSalesSummary = () => {
                   <option key={item} value={item}>{item}</option>
                 ))}
               </select>
-              <p className="text-xs text-gray-500 mt-1">Category is required for all Sales Summary queries.</p>
+              <p className="text-xs text-text-faint mt-1">Category is required for all Sales Summary queries.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-300 mb-1">Start date</label>
+                <label className="block text-sm text-text-secondary mb-1">Start date</label>
                 <input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full border border-gray-700 rounded-md px-3 py-2 bg-gray-900 text-white"
+                  className="w-full border border-surface-700 rounded-md px-3 py-2 bg-surface-900 text-white"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-300 mb-1">End date</label>
+                <label className="block text-sm text-text-secondary mb-1">End date</label>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full border border-gray-700 rounded-md px-3 py-2 bg-gray-900 text-white"
+                  className="w-full border border-surface-700 rounded-md px-3 py-2 bg-surface-900 text-white"
                 />
               </div>
             </div>
@@ -153,14 +153,14 @@ export const OwnerSalesSummary = () => {
             <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
               <button
                 type="submit"
-                className="inline-flex items-center justify-center bg-teal-500 hover:bg-teal-400 text-gray-900 font-semibold rounded-md px-5 py-2 transition"
+                className="inline-flex items-center justify-center bg-accent hover:bg-accent-hover text-white font-semibold rounded-md px-5 py-2 transition"
               >
                 View Sales
               </button>
               <button
                 type="button"
                 onClick={handleEstimate}
-                className="inline-flex items-center justify-center bg-indigo-500 hover:bg-indigo-400 text-white font-semibold rounded-md px-5 py-2 transition"
+                className="inline-flex items-center justify-center bg-accent hover:bg-accent-hover text-white font-semibold rounded-md px-5 py-2 transition"
               >
                 Estimate
               </button>
@@ -175,27 +175,27 @@ export const OwnerSalesSummary = () => {
                   setError('');
                   setEstimateError('');
                 }}
-                className="inline-flex items-center justify-center bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-md px-5 py-2 transition"
+                className="inline-flex items-center justify-center bg-surface-700 hover:bg-surface-600 text-white font-semibold rounded-md px-5 py-2 transition"
               >
                 Reset
               </button>
             </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
-            {estimateError && <p className="text-amber-300 text-sm">{estimateError}</p>}
+            {error && <p className="text-danger text-sm">{error}</p>}
+            {estimateError && <p className="text-warning text-sm">{estimateError}</p>}
           </div>
         </form>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-            <h3 className="text-lg font-semibold text-gray-100 mb-3">Sales Summary Results</h3>
+          <div className="bg-surface-800 border border-surface-700 rounded-xl p-5">
+            <h3 className="text-lg font-semibold text-text-primary mb-3">Sales Summary Results</h3>
             {loading ? (
-              <p className="text-gray-400">Loading sales...</p>
+              <p className="text-text-muted">Loading sales...</p>
             ) : !records.length ? (
-              <p className="text-gray-400">No sales records to display. Apply a category filter to view results.</p>
+              <p className="text-text-muted">No sales records to display. Apply a category filter to view results.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-700 text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wide text-gray-400">
+                <table className="min-w-full divide-y divide-surface-700 text-sm">
+                  <thead className="text-left text-xs uppercase tracking-wide text-text-muted">
                     <tr>
                       <th className="px-3 py-2">Date</th>
                       <th className="px-3 py-2">Product</th>
@@ -205,15 +205,15 @@ export const OwnerSalesSummary = () => {
                       <th className="px-3 py-2">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-700">
+                  <tbody className="divide-y divide-surface-700">
                     {records.map((row) => (
-                      <tr key={`${row.transaction_id}-${row.sale_date}-${row.product_id}`} className="hover:bg-gray-700/30">
-                        <td className="px-3 py-2 text-gray-200">{row.sale_date || 'N/A'}</td>
-                        <td className="px-3 py-2 text-gray-200">{row.product_name || 'N/A'}</td>
-                        <td className="px-3 py-2 text-gray-200">{row.category || 'N/A'}</td>
-                        <td className="px-3 py-2 text-gray-200">{row.quantity ?? '-'}</td>
-                        <td className="px-3 py-2 text-gray-200">${parseFloat(row.unit_price || 0).toFixed(2)}</td>
-                        <td className="px-3 py-2 text-gray-200">${parseFloat(row.total_price || 0).toFixed(2)}</td>
+                      <tr key={`${row.transaction_id}-${row.sale_date}-${row.product_id}`} className="hover:bg-surface-700/30">
+                        <td className="px-3 py-2 text-text-primary">{row.sale_date || 'N/A'}</td>
+                        <td className="px-3 py-2 text-text-primary">{row.product_name || 'N/A'}</td>
+                        <td className="px-3 py-2 text-text-primary">{row.category || 'N/A'}</td>
+                        <td className="px-3 py-2 text-text-primary">{row.quantity ?? '-'}</td>
+                        <td className="px-3 py-2 text-text-primary">${parseFloat(row.unit_price || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-text-primary">${parseFloat(row.total_price || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -222,18 +222,18 @@ export const OwnerSalesSummary = () => {
             )}
           </div>
 
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-            <h3 className="text-lg font-semibold text-gray-100 mb-3">Estimate Stats</h3>
+          <div className="bg-surface-800 border border-surface-700 rounded-xl p-5">
+            <h3 className="text-lg font-semibold text-text-primary mb-3">Estimate Stats</h3>
             {estimate ? (
-              <div className="space-y-3 text-gray-200">
-                <p><span className="font-semibold text-gray-100">Category:</span> {category || 'N/A'}</p>
-                <p><span className="font-semibold text-gray-100">Records matched:</span> {estimate.recordCount}</p>
-                <p><span className="font-semibold text-gray-100">Total quantity:</span> {estimate.totalQuantity}</p>
-                <p><span className="font-semibold text-gray-100">Total revenue:</span> ${estimate.totalRevenue.toFixed(2)}</p>
-                <p><span className="font-semibold text-gray-100">Avg revenue per unit:</span> ${estimate.averagePrice.toFixed(2)}</p>
+              <div className="space-y-3 text-text-primary">
+                <p><span className="font-semibold text-text-primary">Category:</span> {category || 'N/A'}</p>
+                <p><span className="font-semibold text-text-primary">Records matched:</span> {estimate.recordCount}</p>
+                <p><span className="font-semibold text-text-primary">Total quantity:</span> {estimate.totalQuantity}</p>
+                <p><span className="font-semibold text-text-primary">Total revenue:</span> ${estimate.totalRevenue.toFixed(2)}</p>
+                <p><span className="font-semibold text-text-primary">Avg revenue per unit:</span> ${estimate.averagePrice.toFixed(2)}</p>
               </div>
             ) : (
-              <p className="text-gray-400">Choose a category and click Estimate to view total stats in the selected date range.</p>
+              <p className="text-text-muted">Choose a category and click Estimate to view total stats in the selected date range.</p>
             )}
           </div>
         </div>

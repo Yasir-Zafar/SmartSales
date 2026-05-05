@@ -4,7 +4,19 @@ import { useAuth } from '../context/AuthContext';
 import { Navbar } from '../components/Navbar';
 
 const API_URL = 'http://localhost:5000/api';
-const PIE_COLORS = ['#14b8a6', '#8b5cf6', '#f59e0b', '#ec4899', '#22d3ee', '#84cc16', '#ef4444'];
+const PIE_COLORS = ['#8b5cf6', '#14b8a6', '#f59e0b', '#f43f5e', '#6366f1', '#22d3ee', '#84cc16'];
+const BAR_GRADIENTS = [
+  ['#6d5dab', '#8b7bc7'],
+  ['#0f8f82', '#2bb5a8'],
+  ['#c47f0e', '#e0a830'],
+  ['#c2354e', '#df5270'],
+  ['#4e52c4', '#6d70d8'],
+  ['#0f8f82', '#3cc4b4'],
+  ['#c47f0e', '#e0bc50'],
+  ['#6d5dab', '#a090d0'],
+  ['#c2354e', '#e06078'],
+  ['#4e52c4', '#7d80e0'],
+];
 const ANOMALY_REFRESH_MS = 10 * 60 * 1000;
 
 const createArc = (cx, cy, r, startAngle, endAngle) => {
@@ -183,64 +195,64 @@ export const AnalystDashboard = () => {
   const compAccuracy = compMape != null ? Math.max(0, 100 - compMape) : null;
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-surface-900">
       <Navbar />
       <div className="p-8">
 
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold text-gray-50">Analyst Dashboard</h2>
-            <p className="text-gray-400 mt-2">Welcome, {user?.email}</p>
+            <h2 className="text-2xl font-semibold text-text-primary">Analyst Dashboard</h2>
+            <p className="text-text-muted mt-2">Welcome, <span className="text-accent">{user?.email}</span></p>
           </div>
           <button
             type="button"
             onClick={() => { setRetrainOpen(true); setRetrainMsg(null); }}
-            className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg"
+            className="bg-accent hover:bg-accent-hover text-white text-sm font-medium px-4 py-2 rounded-lg"
           >
             Retrain
           </button>
         </div>
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h4 className="text-sm font-medium text-gray-400 uppercase">Anomalies Detected</h4>
-            <p className="text-3xl font-bold text-rose-500 mt-2">{anomalyCount}</p>
+          <div className="bg-surface-800 p-6 rounded-xl shadow-xl">
+            <h4 className="text-sm font-medium text-text-muted uppercase">Anomalies Detected</h4>
+            <p className="text-3xl font-bold text-danger mt-2">{anomalyCount}</p>
             <div className="flex items-center justify-between mt-2 gap-2">
-              <p className="text-xs text-gray-500">Current above-threshold count</p>
+              <p className="text-xs text-text-faint">Current above-threshold count</p>
               <button
                 type="button"
                 onClick={loadAnomalyCount}
                 disabled={anomalyRefreshing}
-                className="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 disabled:opacity-60"
+                className="text-xs px-2 py-1 rounded bg-surface-700 hover:bg-surface-600 disabled:opacity-60"
               >
                 {anomalyRefreshing ? 'Refreshing…' : 'Refresh'}
               </button>
             </div>
-            {anomalyError && <p className="text-xs text-red-400 mt-2">{anomalyError}</p>}
+            {anomalyError && <p className="text-xs text-danger mt-2">{anomalyError}</p>}
           </div>
 
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h4 className="text-sm font-medium text-gray-400 uppercase">Segments Tracked</h4>
-            <p className="text-3xl font-bold text-violet-500 mt-2">{segments.length || '—'}</p>
-            <p className="text-xs text-gray-500 mt-1">
+          <div className="bg-surface-800 p-6 rounded-xl shadow-xl">
+            <h4 className="text-sm font-medium text-text-muted uppercase">Segments Tracked</h4>
+            <p className="text-3xl font-bold text-warning mt-2">{segments.length || '—'}</p>
+            <p className="text-xs text-text-faint mt-1">
               {pieTotal > 0 ? `${pieTotal} customers classified` : 'Run ML to segment customers'}
             </p>
           </div>
 
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h4 className="text-sm font-medium text-gray-400 uppercase">Products Analyzed</h4>
-            <p className="text-3xl font-bold text-teal-500 mt-2">{topProducts.length || '—'}</p>
-            <p className="text-xs text-gray-500 mt-1">Showing top sellers by volume</p>
+          <div className="bg-surface-800 p-6 rounded-xl shadow-xl">
+            <h4 className="text-sm font-medium text-text-muted uppercase">Products Analyzed</h4>
+            <p className="text-3xl font-bold text-teal-400 mt-2">{topProducts.length || '—'}</p>
+            <p className="text-xs text-text-faint mt-1">Showing top sellers by volume</p>
           </div>
         </div>
 
         <div className="mt-8">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-4">Product forecast &amp; accuracy</h3>
-            <p className="text-xs text-gray-500 mb-3">Enter a product name (lowercase, as in ML artifacts).</p>
+          <div className="bg-surface-800 p-6 rounded-xl shadow-xl">
+            <h3 className="text-lg font-semibold text-text-primary mb-4">Product forecast &amp; accuracy</h3>
+            <p className="text-xs text-text-faint mb-3">Enter a product name (lowercase, as in ML artifacts).</p>
             <div className="flex gap-2 flex-wrap">
               <input
-                className="flex-1 min-w-[180px] bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+                className="flex-1 min-w-[180px] bg-surface-900 border border-surface-600 rounded-lg px-3 py-2 text-sm text-text-primary"
                 placeholder="e.g. banana"
                 value={productQ}
                 onChange={(e) => setProductQ(e.target.value)}
@@ -249,58 +261,58 @@ export const AnalystDashboard = () => {
                 type="button"
                 onClick={loadForecast}
                 disabled={fcLoading}
-                className="bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg"
+                className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg"
               >
                 {fcLoading ? 'Loading…' : 'Load'}
               </button>
             </div>
-            {fcError && <p className="text-red-400 text-sm mt-3">{fcError}</p>}
+            {fcError && <p className="text-danger text-sm mt-3">{fcError}</p>}
 
             {forecastData && (
               <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">Forecast details</h4>
+                  <h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">Forecast details</h4>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-gray-900 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">5-day total</p>
-                      <p className="text-xl font-bold text-teal-400">{ens?.total ?? '—'}</p>
+                    <div className="bg-surface-900 rounded-lg p-3">
+                      <p className="text-xs text-text-faint">5-day total</p>
+                      <p className="text-xl font-bold text-success">{ens?.total ?? '—'}</p>
                     </div>
-                    <div className="bg-gray-900 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">Avg daily</p>
-                      <p className="text-xl font-bold text-purple-400">{ens?.avg_daily ?? '—'}</p>
+                    <div className="bg-surface-900 rounded-lg p-3">
+                      <p className="text-xs text-text-faint">Avg daily</p>
+                      <p className="text-xl font-bold text-teal-400">{ens?.avg_daily ?? '—'}</p>
                     </div>
-                    <div className="bg-gray-900 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">MAE</p>
-                      <p className="text-xl font-bold text-gray-200">{metrics.mae != null ? metrics.mae.toFixed(3) : '—'}</p>
+                    <div className="bg-surface-900 rounded-lg p-3">
+                      <p className="text-xs text-text-faint">MAE</p>
+                      <p className="text-xl font-bold text-text-primary">{metrics.mae != null ? metrics.mae.toFixed(3) : '—'}</p>
                     </div>
-                    <div className="bg-gray-900 rounded-lg p-3">
-                      <p className="text-xs text-gray-500">RMSE</p>
-                      <p className="text-xl font-bold text-gray-200">{metrics.rmse != null ? metrics.rmse.toFixed(3) : '—'}</p>
+                    <div className="bg-surface-900 rounded-lg p-3">
+                      <p className="text-xs text-text-faint">RMSE</p>
+                      <p className="text-xl font-bold text-text-primary">{metrics.rmse != null ? metrics.rmse.toFixed(3) : '—'}</p>
                     </div>
                   </div>
-                  <div className="bg-gray-900 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">Confidence</p>
+                  <div className="bg-surface-900 rounded-lg p-3">
+                    <p className="text-xs text-text-faint mb-1">Confidence</p>
                     <span className={`text-sm font-semibold ${
-                      forecastData.analyst?.confidence_rating === 'High' ? 'text-green-400' :
-                      forecastData.analyst?.confidence_rating === 'Medium' ? 'text-amber-400' :
-                      'text-red-400'
+                      forecastData.analyst?.confidence_rating === 'High' ? 'text-success' :
+                      forecastData.analyst?.confidence_rating === 'Medium' ? 'text-warning' :
+                      'text-danger'
                     }`}>
                       {forecastData.analyst?.confidence_rating}
                     </span>
-                    <span className="text-xs text-gray-400 ml-2">{forecastData.analyst?.confidence_reason}</span>
+                    <span className="text-xs text-text-muted ml-2">{forecastData.analyst?.confidence_reason}</span>
                   </div>
-                  <div className="bg-gray-900 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">Trend driver</p>
-                    <p className="text-sm text-gray-300">{forecastData.analyst?.trend_driver}</p>
-                    <p className="text-xs text-gray-400 mt-1">{forecastData.analyst?.trend_reason}</p>
+                  <div className="bg-surface-900 rounded-lg p-3">
+                    <p className="text-xs text-text-faint mb-1">Trend driver</p>
+                    <p className="text-sm text-text-secondary">{forecastData.analyst?.trend_driver}</p>
+                    <p className="text-xs text-text-muted mt-1">{forecastData.analyst?.trend_reason}</p>
                   </div>
                   {forecastData.analyst?.previous_persisted_runs?.length > 0 && (
-                    <div className="bg-gray-900 rounded-lg p-3">
-                      <p className="text-xs text-gray-500 mb-2">Recent persisted forecast totals</p>
+                    <div className="bg-surface-900 rounded-lg p-3">
+                      <p className="text-xs text-text-faint mb-2">Recent persisted forecast totals</p>
                       <ul className="space-y-1">
                         {forecastData.analyst.previous_persisted_runs.slice(0, 4).map((r, i) => (
-                          <li key={i} className="text-xs text-gray-400 flex justify-between">
+                          <li key={i} className="text-xs text-text-muted flex justify-between">
                             <span>{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</span>
                             <span className="text-teal-400 font-semibold">{r.ensemble_total_5d ?? 'N/A'}</span>
                           </li>
@@ -313,49 +325,49 @@ export const AnalystDashboard = () => {
                 <div>
                   {comparisonData ? (
                     <div className="space-y-3">
-                      <h4 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">
+                      <h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">
                         Forecast vs actual
                       </h4>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-text-faint">
                         {comparisonData.forecast_window?.start} to {comparisonData.forecast_window?.end}
                       </p>
 
                       {compAccuracy != null && (
-                        <div className="bg-gray-900 rounded-lg p-4 text-center">
-                          <p className="text-xs text-gray-500 mb-1">Prediction accuracy</p>
-                          <p className={`text-3xl font-bold ${compAccuracy >= 80 ? 'text-green-400' : compAccuracy >= 60 ? 'text-amber-400' : 'text-red-400'}`}>
+                        <div className="bg-surface-900 rounded-lg p-4 text-center">
+                          <p className="text-xs text-text-faint mb-1">Prediction accuracy</p>
+                          <p className={`text-3xl font-bold ${compAccuracy >= 80 ? 'text-success' : compAccuracy >= 60 ? 'text-warning' : 'text-danger'}`}>
                             {compAccuracy.toFixed(1)}%
                           </p>
                         </div>
                       )}
 
                       <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-gray-900 rounded-lg p-3 text-center">
-                          <p className="text-xs text-gray-500">MAE</p>
-                          <p className="text-lg font-bold text-teal-400">{comparisonData.metrics?.mae ?? '—'}</p>
+                        <div className="bg-surface-900 rounded-lg p-3 text-center">
+                          <p className="text-xs text-text-faint">MAE</p>
+                          <p className="text-lg font-bold text-success">{comparisonData.metrics?.mae ?? '—'}</p>
                         </div>
-                        <div className="bg-gray-900 rounded-lg p-3 text-center">
-                          <p className="text-xs text-gray-500">RMSE</p>
-                          <p className="text-lg font-bold text-violet-400">{comparisonData.metrics?.rmse ?? '—'}</p>
+                        <div className="bg-surface-900 rounded-lg p-3 text-center">
+                          <p className="text-xs text-text-faint">RMSE</p>
+                          <p className="text-lg font-bold text-teal-400">{comparisonData.metrics?.rmse ?? '—'}</p>
                         </div>
-                        <div className="bg-gray-900 rounded-lg p-3 text-center">
-                          <p className="text-xs text-gray-500">MAPE</p>
-                          <p className="text-lg font-bold text-amber-400">{comparisonData.metrics?.mape_pct != null ? `${comparisonData.metrics.mape_pct}%` : '—'}</p>
+                        <div className="bg-surface-900 rounded-lg p-3 text-center">
+                          <p className="text-xs text-text-faint">MAPE</p>
+                          <p className="text-lg font-bold text-warning">{comparisonData.metrics?.mape_pct != null ? `${comparisonData.metrics.mape_pct}%` : '—'}</p>
                         </div>
                       </div>
 
-                      <div className="bg-gray-900 rounded-lg p-3 flex justify-between text-sm">
+                      <div className="bg-surface-900 rounded-lg p-3 flex justify-between text-sm">
                         <div>
-                          <p className="text-xs text-gray-500">Forecast total</p>
-                          <p className="text-teal-400 font-semibold">{comparisonData.totals?.forecast ?? '—'}</p>
+                          <p className="text-xs text-text-faint">Forecast total</p>
+                          <p className="text-success font-semibold">{comparisonData.totals?.forecast ?? '—'}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Actual total</p>
-                          <p className="text-gray-300 font-semibold">{comparisonData.totals?.actual ?? '—'}</p>
+                          <p className="text-xs text-text-faint">Actual total</p>
+                          <p className="text-text-secondary font-semibold">{comparisonData.totals?.actual ?? '—'}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Error</p>
-                          <p className={`font-semibold ${(comparisonData.totals?.error || 0) >= 0 ? 'text-amber-400' : 'text-rose-400'}`}>
+                          <p className="text-xs text-text-faint">Error</p>
+                          <p className={`font-semibold ${(comparisonData.totals?.error || 0) >= 0 ? 'text-warning' : 'text-danger'}`}>
                             {comparisonData.totals?.error ?? '—'}
                           </p>
                         </div>
@@ -364,7 +376,7 @@ export const AnalystDashboard = () => {
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="text-gray-500 border-b border-gray-700">
+                            <tr className="text-text-faint border-b border-surface-700">
                               <th className="py-2 pr-3 text-left font-medium">Date</th>
                               <th className="py-2 pr-3 text-right font-medium">Forecast</th>
                               <th className="py-2 pr-3 text-right font-medium">Actual</th>
@@ -373,11 +385,11 @@ export const AnalystDashboard = () => {
                           </thead>
                           <tbody>
                             {(comparisonData.points || []).map((point) => (
-                              <tr key={point.date} className="border-b border-gray-800 hover:bg-gray-700/20">
-                                <td className="py-2 pr-3 text-gray-400">{point.date}</td>
-                                <td className="py-2 pr-3 text-right text-teal-300">{point.forecast}</td>
-                                <td className="py-2 pr-3 text-right text-gray-300">{point.actual}</td>
-                                <td className={`py-2 text-right font-medium ${point.error > 0 ? 'text-amber-400' : point.error < 0 ? 'text-rose-400' : 'text-gray-400'}`}>
+                              <tr key={point.date} className="border-b border-surface-700 hover:bg-surface-700/20">
+                                <td className="py-2 pr-3 text-text-muted">{point.date}</td>
+                                <td className="py-2 pr-3 text-right text-teal-400">{point.forecast}</td>
+                                <td className="py-2 pr-3 text-right text-text-secondary">{point.actual}</td>
+                                <td className={`py-2 text-right font-medium ${point.error > 0 ? 'text-warning' : point.error < 0 ? 'text-danger' : 'text-text-muted'}`}>
                                   {point.error > 0 ? '+' : ''}{point.error}
                                 </td>
                               </tr>
@@ -387,9 +399,9 @@ export const AnalystDashboard = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-gray-900 rounded-lg p-8 text-center">
-                      <p className="text-gray-500 text-sm">No forecast-vs-actual data available yet.</p>
-                      <p className="text-gray-600 text-xs mt-1">Upload sales data past a forecast window to see comparisons.</p>
+                    <div className="bg-surface-900 rounded-lg p-8 text-center">
+                      <p className="text-text-faint text-sm">No forecast-vs-actual data available yet.</p>
+                      <p className="text-text-faint text-xs mt-1">Upload sales data past a forecast window to see comparisons.</p>
                     </div>
                   )}
                 </div>
@@ -400,15 +412,15 @@ export const AnalystDashboard = () => {
         </div>
 
         <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-1">Customer segment distribution</h3>
-            <p className="text-xs text-gray-500 mb-4">Customer segment sizes.</p>
+          <div className="bg-surface-800 p-6 rounded-xl shadow-xl">
+            <h3 className="text-lg font-semibold text-text-primary mb-1">Customer segment distribution</h3>
+            <p className="text-xs text-text-faint mb-4">Customer segment sizes.</p>
             {segLoading ? (
-              <p className="text-gray-400 text-sm">Loading…</p>
+              <p className="text-text-muted text-sm">Loading…</p>
             ) : segError ? (
-              <p className="text-red-400 text-sm">{segError}</p>
+              <p className="text-danger text-sm">{segError}</p>
             ) : !pieData.length || pieTotal <= 0 ? (
-              <p className="text-gray-400 text-sm">No segment distribution data available.</p>
+              <p className="text-text-muted text-sm">No segment distribution data available.</p>
             ) : (
               <div className="flex flex-col sm:flex-row gap-6 items-center">
                 <div className="flex-shrink-0">
@@ -426,8 +438,8 @@ export const AnalystDashboard = () => {
                         currentAngle = nextAngle;
                         return (
                           <g key={segment.label}>
-                            <path d={path} fill={segment.color} stroke="#111827" strokeWidth="2" />
-                            <text x={labelX} y={labelY} fill="#e5e7eb" fontSize="10" textAnchor="middle" dominantBaseline="middle">{percent}%</text>
+                            <path d={path} fill={segment.color} stroke="var(--color-surface-900)" strokeWidth="2" />
+                            <text x={labelX} y={labelY} fill="#fff" fontSize="10" textAnchor="middle" dominantBaseline="middle">{percent}%</text>
                           </g>
                         );
                       });
@@ -440,9 +452,9 @@ export const AnalystDashboard = () => {
                     return (
                       <div key={segment.label} className="flex items-center gap-3 text-sm">
                         <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: segment.color }} />
-                        <span className="text-gray-200">{segment.label}</span>
-                        <span className="text-gray-500">({segment.size})</span>
-                        <span className="text-teal-300 ml-auto">{pct}%</span>
+                        <span className="text-text-primary">{segment.label}</span>
+                        <span className="text-text-faint">({segment.size})</span>
+                        <span className="text-teal-400 ml-auto">{pct}%</span>
                       </div>
                     );
                   })}
@@ -451,22 +463,22 @@ export const AnalystDashboard = () => {
             )}
           </div>
 
-          <div className="bg-gray-800 p-6 rounded-xl shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-50 mb-1">Popular products by segment</h3>
-            <p className="text-xs text-gray-500 mb-4">Top products per customer segment.</p>
+          <div className="bg-surface-800 p-6 rounded-xl shadow-xl">
+            <h3 className="text-lg font-semibold text-text-primary mb-1">Popular products by segment</h3>
+            <p className="text-xs text-text-faint mb-4">Top products per customer segment.</p>
             {segLoading ? (
-              <p className="text-gray-400 text-sm">Loading…</p>
+              <p className="text-text-muted text-sm">Loading…</p>
             ) : segError ? (
-              <p className="text-red-400 text-sm">{segError}</p>
+              <p className="text-danger text-sm">{segError}</p>
             ) : (
               <div className="max-h-72 overflow-y-auto space-y-2">
                 {segments.map((s) => (
-                  <div key={s.segment_id ?? s.label} className="border border-gray-700 rounded-lg p-3">
+                  <div key={s.segment_id ?? s.label} className="border border-surface-700 rounded-lg p-3">
                     <div className="flex items-center justify-between">
                       <p className="text-teal-400 font-medium text-sm">{s.label}</p>
-                      <p className="text-xs text-gray-500">Size: {s.size}</p>
+                      <p className="text-xs text-text-faint">Size: {s.size}</p>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-text-muted mt-1">
                       {(s.top_products || [])
                         .slice(0, 5)
                         .map((p) => (typeof p === 'string' ? p : p?.product))
@@ -480,32 +492,33 @@ export const AnalystDashboard = () => {
           </div>
         </div>
 
-        <div className="mt-8 bg-gray-800 p-6 rounded-xl shadow-xl">
-          <h3 className="text-lg font-semibold text-gray-50 mb-1">Top 10 Products</h3>
-          <p className="text-xs text-gray-500 mb-6">By total quantity sold</p>
+        <div className="mt-8 bg-surface-800 p-6 rounded-xl shadow-xl">
+          <h3 className="text-lg font-semibold text-text-primary mb-1">Top 10 Products</h3>
+          <p className="text-xs text-text-faint mb-6">By total quantity sold</p>
 
           {loadingChart ? (
-            <p className="text-gray-400">Loading chart...</p>
+            <p className="text-text-muted">Loading chart...</p>
           ) : chartError ? (
-            <p className="text-red-400">{chartError}</p>
+            <p className="text-danger">{chartError}</p>
           ) : !topProducts.length ? (
-            <p className="text-gray-400">No product sales data available.</p>
+            <p className="text-text-muted">No product sales data available.</p>
           ) : (
             <div className="relative">
               <div className="flex gap-0">
                 <div className="flex flex-col-reverse justify-between pr-3 pb-10" style={{ minWidth: '40px' }}>
                   {yTicks.map((tick) => (
-                    <span key={tick} className="text-xs text-gray-500 text-right leading-none">{tick}</span>
+                    <span key={tick} className="text-xs text-text-faint text-right leading-none">{tick}</span>
                   ))}
                 </div>
                 <div className="flex-1 flex flex-col">
-                  <div className="relative flex items-end gap-2 border-l border-b border-gray-700" style={{ height: '260px' }}>
+                  <div className="relative flex items-end gap-2 border-l border-b border-surface-700" style={{ height: '260px' }}>
                     {yTicks.map((tick) => (
-                      <div key={tick} className="absolute left-0 right-0 border-t border-gray-700/50" style={{ bottom: `${(tick / chartMax) * 100}%` }} />
+                      <div key={tick} className="absolute left-0 right-0 border-t border-surface-700/50" style={{ bottom: `${(tick / chartMax) * 100}%` }} />
                     ))}
                     {topProducts.map((p, i) => {
                       const heightPct = (p.qty / chartMax) * 100;
                       const isHovered = hoveredBar === i;
+                      const grad = BAR_GRADIENTS[i % BAR_GRADIENTS.length];
                       return (
                         <div
                           key={p.name}
@@ -515,18 +528,18 @@ export const AnalystDashboard = () => {
                           onMouseLeave={() => setHoveredBar(null)}
                         >
                           {isHovered && (
-                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-10 bg-gray-900 border border-teal-700 text-white rounded-lg px-4 py-3 whitespace-nowrap shadow-xl pointer-events-none">
-                              <p className="text-sm font-bold text-teal-300 mb-1">{p.name}</p>
-                              <p className="text-xs text-gray-400">Qty: <span className="font-bold text-white text-sm">{p.qty}</span></p>
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-teal-700" />
+                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-10 bg-surface-900 border border-surface-600 text-white rounded-lg px-4 py-3 whitespace-nowrap shadow-xl pointer-events-none">
+                              <p className="text-sm font-bold text-text-primary mb-1">{p.name}</p>
+                              <p className="text-xs text-text-faint">Qty: <span className="font-bold text-text-primary text-sm">{p.qty}</span></p>
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-surface-600" />
                             </div>
                           )}
                           <div
                             className="w-full rounded-t-md transition-all duration-150"
                             style={{
                               height: `${Math.max(2, heightPct)}%`,
-                              background: isHovered ? 'linear-gradient(to top, #0d9488, #67e8f9)' : 'linear-gradient(to top, #0f766e, #2dd4bf)',
-                              boxShadow: isHovered ? '0 0 12px rgba(45,212,191,0.4)' : 'none',
+                              background: isHovered ? `linear-gradient(to top, ${grad[1]}, ${grad[0]})` : `linear-gradient(to top, ${grad[0]}, ${grad[1]}80)`,
+                              boxShadow: isHovered ? `0 0 12px ${grad[0]}50` : 'none',
                             }}
                           />
                         </div>
@@ -536,7 +549,7 @@ export const AnalystDashboard = () => {
                   <div className="flex gap-2 mt-2">
                     {topProducts.map((p) => (
                       <div key={p.name} className="flex-1 text-center">
-                        <span className="text-xs text-gray-400 block overflow-hidden" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '80px', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</span>
+                        <span className="text-xs text-text-muted block overflow-hidden" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '80px', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.name}>{p.name}</span>
                       </div>
                     ))}
                   </div>
@@ -550,26 +563,26 @@ export const AnalystDashboard = () => {
 
       {retrainOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-            <h3 className="text-lg font-semibold text-gray-50 mb-2">Retrain — export daily sales</h3>
-            <p className="text-xs text-gray-500 mb-4">Exports the flat CSV (ML training format) from <code className="text-gray-400">daily_sales</code> for the selected period. Download only, or push to ML service.</p>
+          <div className="bg-surface-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-text-primary mb-2">Retrain — export daily sales</h3>
+            <p className="text-xs text-text-faint mb-4">Exports the flat CSV (ML training format) from <code className="text-text-muted">daily_sales</code> for the selected period. Download only, or push to ML service.</p>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-500">Start date</label>
-                <input type="date" className="w-full mt-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                <label className="text-xs text-text-faint">Start date</label>
+                <input type="date" className="w-full mt-1 bg-surface-900 border border-surface-600 rounded-lg px-3 py-2 text-sm text-text-primary" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
               </div>
               <div>
-                <label className="text-xs text-gray-500">End date</label>
-                <input type="date" className="w-full mt-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                <label className="text-xs text-text-faint">End date</label>
+                <input type="date" className="w-full mt-1 bg-surface-900 border border-surface-600 rounded-lg px-3 py-2 text-sm text-text-primary" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
               </div>
             </div>
             {retrainMsg && (
-              <div className={`mt-4 text-sm rounded-lg px-3 py-2 ${retrainMsg.ok ? 'bg-teal-900/40 text-teal-200' : 'bg-red-900/40 text-red-200'}`}>{retrainMsg.text}</div>
+              <div className={`mt-4 text-sm rounded-lg px-3 py-2 ${retrainMsg.ok ? 'bg-success/40 text-success' : 'bg-danger/40 text-danger'}`}>{retrainMsg.text}</div>
             )}
             <div className="flex flex-wrap gap-2 mt-6">
-              <button type="button" onClick={() => setRetrainOpen(false)} className="flex-1 min-w-[100px] bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm py-2 rounded-lg">Close</button>
-              <button type="button" onClick={downloadExport} className="flex-1 min-w-[100px] bg-gray-600 hover:bg-gray-500 text-white text-sm py-2 rounded-lg">Download CSV</button>
-              <button type="button" onClick={runRetrain} disabled={retrainBusy} className="flex-1 min-w-[100px] bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm py-2 rounded-lg">{retrainBusy ? '…' : 'Reload ML'}</button>
+              <button type="button" onClick={() => setRetrainOpen(false)} className="flex-1 min-w-[100px] bg-surface-700 hover:bg-surface-600 text-text-primary text-sm py-2 rounded-lg">Close</button>
+              <button type="button" onClick={downloadExport} className="flex-1 min-w-[100px] bg-surface-600 hover:bg-surface-500 text-white text-sm py-2 rounded-lg">Download CSV</button>
+              <button type="button" onClick={runRetrain} disabled={retrainBusy} className="flex-1 min-w-[100px] bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm py-2 rounded-lg">{retrainBusy ? '…' : 'Reload ML'}</button>
             </div>
           </div>
         </div>

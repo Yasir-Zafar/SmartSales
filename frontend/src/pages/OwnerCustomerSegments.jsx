@@ -58,12 +58,12 @@ export const OwnerCustomerSegments = () => {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-surface-900">
       <Navbar />
       <div className="p-8">
-        <div className="bg-gray-800 rounded-xl shadow-xl p-6 border border-teal-500/20">
-          <h2 className="text-2xl font-semibold text-gray-50">Customer Segment Membership</h2>
-          <p className="text-sm text-gray-400 mt-2">
+        <div className="bg-surface-800 rounded-xl shadow-xl p-6 border border-accent/20">
+          <h2 className="text-2xl font-semibold text-text-primary">Customer Segment Membership</h2>
+          <p className="text-sm text-text-muted mt-2">
             View which segment each customer belongs to, either for one customer or your full customer base.
           </p>
 
@@ -71,7 +71,7 @@ export const OwnerCustomerSegments = () => {
             <select
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
-              className="bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-200 min-w-[180px]"
+              className="bg-surface-900 border border-surface-600 rounded-lg px-3 py-2 text-sm text-text-primary min-w-[180px]"
             >
               {!customerOptions.length ? (
                 <option value="">No customers available</option>
@@ -87,7 +87,7 @@ export const OwnerCustomerSegments = () => {
               type="button"
               onClick={loadSingleFromDropdown}
               disabled={loading || !customerOptions.length}
-              className="bg-teal-600 hover:bg-teal-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
+              className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
             >
               Show Selected Customer
             </button>
@@ -98,7 +98,7 @@ export const OwnerCustomerSegments = () => {
                 setSegments(allSegments);
               }}
               disabled={loading}
-              className="bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
+              className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
             >
               Show All Customers
             </button>
@@ -106,26 +106,26 @@ export const OwnerCustomerSegments = () => {
               type="button"
               onClick={loadAllSegments}
               disabled={loading}
-              className="bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
+              className="bg-surface-700 hover:bg-surface-600 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
             >
               {loading ? 'Loading…' : 'Refresh List'}
             </button>
           </div>
 
-          {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
+          {error && <p className="text-danger text-sm mt-4">{error}</p>}
         </div>
 
-        <div className="mt-6 bg-gray-800 rounded-xl shadow-xl p-6">
-          <h3 className="text-lg font-semibold text-gray-50">Results</h3>
-          <p className="text-xs text-gray-500 mt-1">Customers found: {segments.length}</p>
+        <div className="mt-6 bg-surface-800 rounded-xl shadow-xl p-6">
+          <h3 className="text-lg font-semibold text-text-primary">Results</h3>
+          <p className="text-xs text-text-faint mt-1">Customers found: {segments.length}</p>
 
           {!segments.length ? (
-            <p className="text-sm text-gray-400 mt-4">No segment data loaded yet.</p>
+            <p className="text-sm text-text-muted mt-4">No segment data loaded yet.</p>
           ) : (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead>
-                  <tr className="text-gray-400 border-b border-gray-700">
+                  <tr className="text-text-muted border-b border-surface-700">
                     <th className="py-2 pr-4">Customer ID</th>
                     <th className="py-2 pr-4">Segment</th>
                     <th className="py-2 pr-4">Purchases</th>
@@ -135,14 +135,14 @@ export const OwnerCustomerSegments = () => {
                 </thead>
                 <tbody>
                   {segments.map((row) => (
-                    <tr key={row.customer_id} className="border-b border-gray-800">
-                      <td className="py-2 pr-4 text-gray-200">{row.customer_id}</td>
-                      <td className="py-2 pr-4 text-teal-300">{row.segment_label}</td>
-                      <td className="py-2 pr-4 text-gray-300">{row.total_purchases ?? '—'}</td>
-                      <td className="py-2 pr-4 text-gray-300">
+                    <tr key={row.customer_id} className="border-b border-surface-700">
+                      <td className="py-2 pr-4 text-text-primary">{row.customer_id}</td>
+                      <td className="py-2 pr-4 text-success">{row.segment_label}</td>
+                      <td className="py-2 pr-4 text-text-secondary">{row.total_purchases ?? '—'}</td>
+                      <td className="py-2 pr-4 text-text-secondary">
                         {row.total_spend != null ? Number(row.total_spend).toFixed(2) : '—'}
                       </td>
-                      <td className="py-2 pr-4 text-gray-400">{row.recommendation || '—'}</td>
+                      <td className="py-2 pr-4 text-text-muted">{row.recommendation || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -1,6 +1,33 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import {
+  LayoutDashboard,
+  Package,
+  TrendingUp,
+  AlertTriangle,
+  BarChart3,
+  Users,
+  UserPlus,
+  UserPen,
+  FileText,
+  GitCompare,
+  LogOut,
+} from 'lucide-react';
+
+const navItem = (to, icon, label, active) => (
+  <Link
+    to={to}
+    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+      active
+        ? 'bg-accent-glow text-accent'
+        : 'text-text-secondary hover:text-text-primary hover:bg-surface-700/50'
+    }`}
+  >
+    {icon}
+    {label}
+  </Link>
+);
 
 export const Navbar = () => {
   const { user, logout } = useAuth();
@@ -12,53 +39,60 @@ export const Navbar = () => {
   };
 
   return (
-    <nav className="bg-gray-800 px-8 py-4 flex justify-between items-center border-b border-white/10">
-      <h3 className="text-xl font-semibold text-gray-50">SmartSales</h3>
-      <div className="flex items-center gap-6">
+    <nav className="bg-surface-800 px-6 py-3 flex justify-between items-center border-b border-surface-700 sticky top-0 z-50">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center">
+          <TrendingUp className="w-4 h-4 text-white" />
+        </div>
+        <span className="text-lg font-bold text-text-primary">SmartSales</span>
+      </div>
+
+      <div className="flex items-center gap-1">
         {user?.role === 'OWNER' && (
           <>
-            <Link to="/owner" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
-            <Link to="/owner/inventory" className="text-gray-400 hover:text-gray-200 transition-colors">Inventory</Link>
-            <Link to="/owner/forecasts" className="text-gray-400 hover:text-gray-200 transition-colors">5-Day Forecast</Link>
-            <Link to="/owner/alerts" className="text-gray-400 hover:text-gray-200 transition-colors">Drop Alerts</Link>
-            <Link to="/dropped-status" className="text-gray-400 hover:text-gray-200 transition-colors">Dropped Status</Link>
-            <Link to="/owner/sales-summary" className="text-gray-400 hover:text-gray-200 transition-colors">Sales Summary</Link>
-            <Link to="/owner/customer-segments" className="text-gray-400 hover:text-gray-200 transition-colors">Customer Segments</Link>
+            {navItem('/owner', <LayoutDashboard className="w-4 h-4" />, 'Dashboard')}
+            {navItem('/owner/inventory', <Package className="w-4 h-4" />, 'Inventory')}
+            {navItem('/owner/forecasts', <BarChart3 className="w-4 h-4" />, 'Forecast')}
+            {navItem('/owner/alerts', <AlertTriangle className="w-4 h-4" />, 'Alerts')}
+            {navItem('/dropped-status', <TrendingUp className="w-4 h-4" />, 'Drops')}
+            {navItem('/owner/sales-summary', <FileText className="w-4 h-4" />, 'Sales')}
+            {navItem('/owner/customer-segments', <Users className="w-4 h-4" />, 'Segments')}
           </>
         )}
         {user?.role === 'ANALYST' && (
           <>
-            <Link to="/analyst" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
-            <Link to="/analyst/abnormal-drops" className="text-gray-400 hover:text-gray-200 transition-colors">Drop Alerts</Link>
-            <Link to="/dropped-status" className="text-gray-400 hover:text-gray-200 transition-colors">Dropped Status</Link>
-            <Link to="/sales-records" className="text-gray-400 hover:text-gray-200 transition-colors">View Sales Records</Link>
-            <Link to="/compare-periods" className="text-gray-400 hover:text-gray-200 transition-colors">Compare Time Periods</Link>
+            {navItem('/analyst', <LayoutDashboard className="w-4 h-4" />, 'Dashboard')}
+            {navItem('/analyst/abnormal-drops', <AlertTriangle className="w-4 h-4" />, 'Alerts')}
+            {navItem('/dropped-status', <TrendingUp className="w-4 h-4" />, 'Drops')}
+            {navItem('/sales-records', <FileText className="w-4 h-4" />, 'Records')}
+            {navItem('/compare-periods', <GitCompare className="w-4 h-4" />, 'Compare')}
           </>
         )}
         {user?.role === 'STAFF' && (
           <>
-            <Link to="/staff" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
-            <Link to="/staff/inventory" className="text-gray-400 hover:text-gray-200 transition-colors">Inventory</Link>
-            <Link to="/staff/operations" className="text-gray-400 hover:text-gray-200 transition-colors">Operations</Link>
-            <Link to="/staff/sales-summary" className="text-gray-400 hover:text-gray-200 transition-colors">Sales Summary</Link>
+            {navItem('/staff', <LayoutDashboard className="w-4 h-4" />, 'Dashboard')}
+            {navItem('/staff/inventory', <Package className="w-4 h-4" />, 'Inventory')}
+            {navItem('/staff/operations', <BarChart3 className="w-4 h-4" />, 'Operations')}
+            {navItem('/staff/sales-summary', <FileText className="w-4 h-4" />, 'Sales')}
           </>
         )}
         {user?.role === 'ADMIN' && (
           <>
-            <Link to="/admin" className="text-gray-400 hover:text-gray-200 transition-colors">Dashboard</Link>
-            <Link to="/admin/view-users" className="text-gray-400 hover:text-gray-200 transition-colors">View Users</Link>
-            <Link to="/admin/create-user" className="text-gray-400 hover:text-gray-200 transition-colors">Create User</Link>
-            <Link to="/admin/edit-user" className="text-gray-400 hover:text-gray-200 transition-colors">Edit User</Link>
+            {navItem('/admin', <LayoutDashboard className="w-4 h-4" />, 'Dashboard')}
+            {navItem('/admin/view-users', <Users className="w-4 h-4" />, 'Users')}
+            {navItem('/admin/create-user', <UserPlus className="w-4 h-4" />, 'Create')}
+            {navItem('/admin/edit-user', <UserPen className="w-4 h-4" />, 'Edit')}
           </>
         )}
+
         <button
           onClick={handleLogout}
-          className="ml-4 bg-transparent border-none text-gray-400 hover:text-gray-200 cursor-pointer transition-colors"
+          className="flex items-center gap-2 ml-2 px-3 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-danger hover:bg-danger-glow transition-all"
         >
+          <LogOut className="w-4 h-4" />
           Logout
         </button>
       </div>
     </nav>
   );
 };
-

@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { AlertTriangle, BarChart3, TrendingUp } from 'lucide-react';
 import axios from 'axios';
 import { Navbar } from '../components/Navbar';
 
 const API_URL = 'http://localhost:5000/api';
 
 const severityBadge = (severity) => {
-  if (severity === 'critical') return 'bg-red-500/10 text-red-400 border border-red-500/30';
-  if (severity === 'high') return 'bg-orange-500/10 text-orange-400 border border-orange-500/30';
-  if (severity === 'medium') return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30';
-  return 'bg-gray-500/10 text-gray-400 border border-gray-500/30';
+  if (severity === 'critical') return 'bg-danger/10 text-danger border border-danger/30';
+  if (severity === 'high') return 'bg-warning/10 text-warning border border-warning/30';
+  if (severity === 'medium') return 'bg-warning/10 text-warning border border-warning/30';
+  return 'bg-surface-600/30 text-text-muted border border-surface-600/30';
 };
 
 export const AnalystAbnormalDrops = () => {
@@ -76,78 +77,84 @@ export const AnalystAbnormalDrops = () => {
   const totalEvents = filteredHistory.length;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-surface-900 text-white">
       <Navbar />
       <div className="max-w-7xl mx-auto p-6">
         <div className="mb-6">
           <h2 className="text-3xl font-bold">Abnormal Drop Alerts</h2>
-          <p className="text-gray-400 mt-1">Monitor and analyze detected sales anomalies with timestamps and severity.</p>
+          <p className="text-text-muted mt-1">Monitor and analyze detected sales anomalies with timestamps and severity.</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          <div className="bg-gray-800 border border-red-500/20 rounded-xl p-5">
+          <div className="bg-surface-800 border border-danger/20 rounded-xl p-5">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">🚨</span>
+              <div className="w-9 h-9 rounded-lg bg-surface-700 flex items-center justify-center text-danger">
+                <AlertTriangle size={18} />
+              </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide">Active Alerts</p>
-                <p className="text-2xl font-bold text-gray-100">{activeAlerts}</p>
+                <p className="text-xs text-text-muted uppercase tracking-wide">Active Alerts</p>
+                <p className="text-2xl font-bold text-text-primary">{activeAlerts}</p>
               </div>
             </div>
           </div>
-          <div className="bg-gray-800 border border-teal-500/20 rounded-xl p-5">
+          <div className="bg-surface-800 border border-success/20 rounded-xl p-5">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">📊</span>
+              <div className="w-9 h-9 rounded-lg bg-surface-700 flex items-center justify-center text-success">
+                <BarChart3 size={18} />
+              </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide">Events ({timeframe})</p>
-                <p className="text-2xl font-bold text-gray-100">{totalEvents}</p>
+                <p className="text-xs text-text-muted uppercase tracking-wide">Events ({timeframe})</p>
+                <p className="text-2xl font-bold text-text-primary">{totalEvents}</p>
               </div>
             </div>
           </div>
-          <div className="bg-gray-800 border border-violet-500/20 rounded-xl p-5">
+          <div className="bg-surface-800 border border-accent/20 rounded-xl p-5">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">📈</span>
+              <div className="w-9 h-9 rounded-lg bg-surface-700 flex items-center justify-center text-accent">
+                <TrendingUp size={18} />
+              </div>
               <div>
-                <p className="text-xs text-gray-400 uppercase tracking-wide">Peak Alerts</p>
-                <p className="text-2xl font-bold text-gray-100">{maxCount}</p>
+                <p className="text-xs text-text-muted uppercase tracking-wide">Peak Alerts</p>
+                <p className="text-2xl font-bold text-text-primary">{maxCount}</p>
               </div>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-50">Active Notifications</h3>
+          <div className="bg-surface-800 border border-surface-700 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-surface-700">
+              <h3 className="text-lg font-semibold text-text-primary">Active Notifications</h3>
             </div>
             <div className="p-4 max-h-96 overflow-y-auto space-y-2">
               {notifications.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-6">No active notifications.</p>
+                <p className="text-text-faint text-sm text-center py-6">No active notifications.</p>
               ) : (
                 notifications.map((alert, idx) => (
-                  <div key={`${alert.product}-${idx}`} className="border border-gray-700 bg-gray-900/60 rounded-lg p-3">
+                  <div key={`${alert.product}-${idx}`} className="border border-surface-700 bg-surface-900/60 rounded-lg p-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-100">{alert.product}</p>
+                      <p className="text-sm font-medium text-text-primary">{alert.product}</p>
                       <span className={`px-2 py-0.5 rounded text-xs font-semibold capitalize ${severityBadge(alert.severity)}`}>
                         {alert.severity}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">Drop <span className="text-red-400 font-semibold">{alert.drop_pct}%</span></p>
+                    <p className="text-xs text-text-muted mt-1">Drop <span className="text-danger font-semibold">{alert.drop_pct}%</span></p>
                   </div>
                 ))
               )}
             </div>
           </div>
 
-          <div className="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-700 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-50">Alert Frequency</h3>
+          <div className="lg:col-span-2 bg-surface-800 border border-surface-700 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-surface-700 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-text-primary">Alert Frequency</h3>
               <div className="flex items-center gap-3">
-                <label htmlFor="timeframe" className="text-xs text-gray-500">Timeframe</label>
+                <label htmlFor="timeframe" className="text-xs text-text-faint">Timeframe</label>
                 <select
                   id="timeframe"
                   value={timeframe}
                   onChange={(e) => setTimeframe(e.target.value)}
-                  className="bg-gray-900 border border-gray-700 text-sm rounded-lg px-3 py-1.5 focus:border-teal-500 focus:outline-none"
+                  className="bg-surface-900 border border-surface-700 text-sm rounded-lg px-3 py-1.5 focus:border-success focus:outline-none"
                 >
                   <option value="1h">Last 1 hour</option>
                   <option value="24h">Last 24 hours</option>
@@ -159,17 +166,17 @@ export const AnalystAbnormalDrops = () => {
             </div>
             <div className="p-5">
               {series.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-6">No stored alert history yet.</p>
+                <p className="text-text-faint text-sm text-center py-6">No stored alert history yet.</p>
               ) : (
                 <>
-                  <div className="h-60 border border-gray-700 rounded-lg bg-gray-900/60 p-4">
+                  <div className="h-60 border border-surface-700 rounded-lg bg-surface-900/60 p-4">
                     <div className="h-full flex items-end gap-1 overflow-x-auto">
                       {series.map((point) => {
                         const heightPct = Math.max(6, (point.count / Math.max(1, maxCount)) * 100);
                         return (
                           <div key={point.ts} className="flex flex-col items-center justify-end min-w-[14px] h-full">
                             <div
-                              className="w-3 bg-teal-400 rounded-t hover:bg-teal-300 transition"
+                              className="w-3 bg-accent rounded-t hover:bg-accent-hover transition"
                               style={{ height: `${heightPct}%` }}
                               title={`${point.label} | alerts: ${point.count}`}
                             />
@@ -178,7 +185,7 @@ export const AnalystAbnormalDrops = () => {
                       })}
                     </div>
                   </div>
-                  <div className="mt-3 text-xs text-gray-500 flex justify-between gap-4">
+                  <div className="mt-3 text-xs text-text-faint flex justify-between gap-4">
                     <span>Start: {series[0].label}</span>
                     <span>End: {series[series.length - 1].label}</span>
                     <span>Peak: {maxCount} alerts/min</span>

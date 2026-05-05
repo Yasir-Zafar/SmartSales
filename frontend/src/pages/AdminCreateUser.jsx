@@ -31,62 +31,62 @@ export const AdminCreateUser = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-900">
+    <div className="min-h-screen flex flex-col bg-surface-900">
       <Navbar />
-      <div className="p-8">
-        <h2 className="text-2xl font-semibold text-gray-50">Create User Account</h2>
-        <p className="text-gray-400 mt-2">Welcome, {user?.email}</p>
+      <div className="p-8 flex flex-col items-center">
+        <h2 className="text-2xl font-semibold text-text-primary">Create User Account</h2>
+        <p className="text-text-muted mt-2">Welcome, <span className="text-accent">{user?.email}</span></p>
 
-        <div className="mt-8 max-w-2xl">
-          <div className="bg-gray-800 p-8 rounded-xl shadow-xl border border-gray-700">
-            <h3 className="text-xl font-semibold text-gray-50 mb-2">New User Account Details</h3>
-            <p className="text-gray-400 mb-6 text-sm">
+        <div className="mt-8 max-w-2xl w-full">
+          <div className="bg-surface-800 p-8 rounded-xl shadow-xl border border-surface-700">
+            <h3 className="text-xl font-semibold text-text-primary mb-2">New User Account Details</h3>
+            <p className="text-text-muted mb-6 text-sm">
               Assign roles (Owner, Analyst, Staff) to control user access and permissions.
             </p>
             {message && (
-              <p className={`my-4 px-4 py-2 rounded-lg ${message.includes('successfully') ? 'bg-teal-600/20 text-teal-400 border border-teal-600/50' : 'bg-rose-600/20 text-rose-400 border border-rose-600/50'}`}>
+              <p className={`my-4 px-4 py-2 rounded-lg ${message.includes('successfully') ? 'bg-success/20 text-success border border-success/50' : 'bg-danger/20 text-danger border border-danger/50'}`}>
                 {message}
               </p>
             )}
             <form onSubmit={handleCreateUser}>
               <div className="mb-6">
-                <label className="block mb-2 text-sm text-gray-400">Full Name</label>
+                <label className="block mb-2 text-sm text-text-muted">Full Name</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="John Doe"
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-transparent transition-all"
                 />
               </div>
               <div className="mb-6">
-                <label className="block mb-2 text-sm text-gray-400">Email Address</label>
+                <label className="block mb-2 text-sm text-text-muted">Email Address</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   placeholder="user@smartsales.com"
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-transparent transition-all"
                 />
               </div>
               <div className="mb-6">
-                <label className="block mb-2 text-sm text-gray-400">Temporary Password</label>
+                <label className="block mb-2 text-sm text-text-muted">Temporary Password</label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-transparent transition-all"
                 />
               </div>
               <div className="mb-8">
-                <label className="block mb-2 text-sm text-gray-400">User Role</label>
+                <label className="block mb-2 text-sm text-text-muted">User Role</label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-600 focus:border-transparent transition-all cursor-pointer"
+                  className="w-full px-4 py-3 bg-surface-900 border border-surface-600 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-transparent transition-all cursor-pointer"
                 >
                   <option value="OWNER">Owner (Full Business Access)</option>
                   <option value="ANALYST">Analyst (Data Visualization)</option>
@@ -95,7 +95,7 @@ export const AdminCreateUser = () => {
               </div>
               <button
                 type="submit"
-                className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-lg"
+                className="w-full bg-accent hover:bg-accent-hover text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-lg"
               >
                 Provision Account
               </button>

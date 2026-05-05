@@ -56,36 +56,36 @@ export const OwnerFiveDayForecast = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-surface-900 text-white">
       <Navbar />
       <div className="max-w-6xl mx-auto p-6">
         <h2 className="text-3xl font-bold">Owner 5-Day Sales Forecast</h2>
-        <p className="text-gray-400 mt-1">Top forecasted products for the next 5 days.</p>
+        <p className="text-text-muted mt-1">Top forecasted products for the next 5 days.</p>
 
-        <div className="mt-6 bg-gray-800 p-6 rounded-xl shadow-xl">
+        <div className="mt-6 bg-surface-800 p-6 rounded-xl shadow-xl">
           {loading ? (
-            <p className="text-gray-400 text-sm">Loading forecasts...</p>
+            <p className="text-text-muted text-sm">Loading forecasts...</p>
           ) : error ? (
-            <p className="text-red-400 text-sm">{error}</p>
+            <p className="text-danger text-sm">{error}</p>
           ) : forecasts.length === 0 ? (
-            <p className="text-gray-400 text-sm">No forecast data available. Reload ML first.</p>
+            <p className="text-text-muted text-sm">No forecast data available. Reload ML first.</p>
           ) : (
             <div className="max-h-[32rem] overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-gray-800 border-b border-gray-700">
-                  <tr className="text-left text-gray-400 text-xs">
+                <thead className="sticky top-0 bg-surface-800 border-b border-surface-700">
+                  <tr className="text-left text-text-muted text-xs">
                     <th className="pb-2 pr-2">Product</th>
                     <th className="pb-2 px-2">Category</th>
                     <th className="pb-2 pl-2 text-right">5d Total</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-text-secondary">
                   {forecasts.map((row, idx) => (
-                    <tr key={`${row.product}-${idx}`} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                    <tr key={`${row.product}-${idx}`} className="border-b border-surface-700/50 hover:bg-surface-700/30">
                       <td className="py-2 pr-2">{row.product}</td>
-                      <td className="py-2 px-2 text-xs text-gray-400">{row.category || 'N/A'}</td>
+                      <td className="py-2 px-2 text-xs text-text-muted">{row.category || 'N/A'}</td>
                       <td className="py-2 pl-2 text-right">
-                        <span className="text-teal-400 font-semibold">{row.ensemble_total_5d ?? 'N/A'}</span>
+                        <span className="text-success font-semibold">{row.ensemble_total_5d ?? 'N/A'}</span>
                       </td>
                     </tr>
                   ))}
