@@ -1,4 +1,24 @@
 import { supabaseAdmin } from '../config/db.js';
+import { validatePasswordStrength } from '../config/security.js';
+import { bumpTokenVersion } from './authLoginController.js';
+import { revokeAllSessionsForUser } from '../utils/sessionStore.js';
+import { invalidateProfileCache } from '../middleware/auth.js';
+
+/**
+ * Any admin action that changes what a user is allowed to do must also end the
+ * sessions they already hold — otherwise a demoted or deactivated account keeps
+ * its old powers until its access token happens to expire.
+ */
+async function endAllSessions(userId, reason) {
+  try {
+    await bumpTokenVersion(userId);
+    await revokeAllSessionsForUser(userId, reason);
+    invalidateProfileCache(userId);
+  } catch (err) {
+    console.error(`[admin] Could not revoke sessions for ${userId}:`, err?.message || err);
+    throw err;
+  }
+}
 
 // Helper to combine auth user and profile
 async function getUserWithProfileById(id) {
@@ -93,6 +113,15 @@ export async function resetUserPassword(req, res) {
     return res.status(400).json({ message: 'Password is required' });
   }
 
+  const problems = validatePasswordStrength(password);
+  if (problems.length) {
+    return res.status(400).json({
+      message: `Password ${problems.join(', ')}`,
+      code: 'WEAK_PASSWORD',
+      problems,
+    });
+  }
+
   try {
     const { data, error } = await supabaseAdmin.auth.admin.updateUserById(id, {
       password
@@ -103,8 +132,11 @@ export async function resetUserPassword(req, res) {
       return res.status(400).json({ message: error.message || 'Failed to reset password' });
     }
 
+    // Force every device holding the old password's session back to the login screen.
+    await endAllSessions(id, 'admin_password_reset');
+
     return res.json({
-      message: 'Password reset successfully',
+      message: 'Password reset. The user has been signed out everywhere.',
       userId: data.user.id
     });
   } catch (err) {
@@ -135,8 +167,11 @@ export async function updateUserRole(req, res) {
       return res.status(400).json({ message: 'Failed to update user role' });
     }
 
+    // A token still carries the old role claim, so the user must re-authenticate.
+    await endAllSessions(id, 'role_changed');
+
     return res.json({
-      message: 'Role updated successfully',
+      message: 'Role updated. The user has been signed out so the new role takes effect.',
       user: await getUserWithProfileById(id)
     });
   } catch (err) {
@@ -217,8 +252,14 @@ export async function updateUserStatus(req, res) {
       return res.status(400).json({ message: 'Failed to update user status' });
     }
 
+    // Deactivation has to cut existing sessions immediately, not just block the
+    // next sign-in. Reactivation bumps too, so the state is unambiguous.
+    await endAllSessions(id, active ? 'reactivated' : 'deactivated');
+
     return res.json({
-      message: `User ${active ? 'activated' : 'deactivated'} successfully`,
+      message: active
+        ? 'User reactivated. They can sign in again.'
+        : 'User deactivated and signed out of every device.',
       user: await getUserWithProfileById(id)
     });
   } catch (err) {

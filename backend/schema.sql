@@ -5,8 +5,48 @@ CREATE TABLE IF NOT EXISTS profiles (
   role TEXT CHECK (role IN ('ADMIN','OWNER','ANALYST','STAFF')),
   active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT NOW(),
-  last_logged_in TIMESTAMP
+  last_logged_in TIMESTAMP,
+  -- Incremented to invalidate every access token already issued for this user.
+  token_version INTEGER NOT NULL DEFAULT 0
 );
+
+-- Migration safety for deployments created before cookie auth landed.
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
+
+-- One row per signed-in device. Stores only the SHA-256 of the live refresh
+-- token id, so a database dump yields nothing an attacker can replay.
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  token_hash     TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at     TIMESTAMPTZ NOT NULL,
+  rotated_count  INTEGER NOT NULL DEFAULT 0,
+  user_agent     TEXT,
+  ip_address     TEXT,
+  revoked_at     TIMESTAMPTZ,
+  revoked_reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user    ON auth_sessions(user_id, revoked_at);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at);
+
+-- Append-only auth audit trail.
+CREATE TABLE IF NOT EXISTS auth_events (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  email      TEXT,
+  event      TEXT NOT NULL,
+  ip_address TEXT,
+  user_agent TEXT,
+  detail     TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_events_user ON auth_events(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_events_type ON auth_events(event, created_at DESC);
 
 -- Daily sales table used by CSV upload and analytics pages
 CREATE TABLE IF NOT EXISTS daily_sales (
@@ -96,6 +136,38 @@ CREATE INDEX IF NOT EXISTS idx_failed_login_attempts_email ON failed_login_attem
 CREATE INDEX IF NOT EXISTS idx_failed_login_attempts_time ON failed_login_attempts(attempted_at DESC);
 
 -- Enable Row Level Security
+ALTER TABLE auth_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE auth_events ENABLE ROW LEVEL SECURITY;
+
+-- Created only if absent, so re-running this file never drops anything.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'auth_sessions'
+      AND policyname = 'Service role manages auth sessions'
+  ) THEN
+    CREATE POLICY "Service role manages auth sessions"
+      ON auth_sessions
+      USING (auth.jwt()->>'role' = 'service_role')
+      WITH CHECK (auth.jwt()->>'role' = 'service_role');
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'auth_events'
+      AND policyname = 'Service role manages auth events'
+  ) THEN
+    CREATE POLICY "Service role manages auth events"
+      ON auth_events
+      USING (auth.jwt()->>'role' = 'service_role')
+      WITH CHECK (auth.jwt()->>'role' = 'service_role');
+  END IF;
+END
+$$;
+
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE csv_uploads ENABLE ROW LEVEL SECURITY;

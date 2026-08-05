@@ -1,134 +1,111 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import { ProtectedRoute } from './components/ProtectedRoute';
-import { LoginPage } from './pages/LoginPage';
-import { OwnerDashboard } from './pages/OwnerDashboard';
-import { AnalystDashboard } from './pages/AnalystDashboard';
-import { StaffDashboard } from './pages/StaffDashboard';
-import { AdminDashboard } from './pages/AdminDashboard';
-import { AdminCreateUser } from './pages/AdminCreateUser';
-import { AdminEditUser } from './pages/AdminEditUser';
-import { AdminViewUsers } from './pages/AdminViewUsers';
-import { SalesRecords } from './pages/SalesRecords';
-import { CompareTimePeriods } from './pages/CompareTimePeriods';
-import { OwnerSalesSummary } from './pages/OwnerSalesSummary';
-import { OwnerAlerts } from './pages/OwnerAlerts';
-import { OwnerFiveDayForecast } from './pages/OwnerFiveDayForecast';
-import { OwnerCustomerSegments } from './pages/OwnerCustomerSegments';
-import { OwnerInventory } from './pages/OwnerInventory';
-import { AnalystAbnormalDrops } from './pages/AnalystAbnormalDrops';
-import { StaffOperations } from './pages/StaffOperations';
-import { DroppedStatus } from './pages/DroppedStatus';
-import { StaffSalesSummary } from './pages/StaffSalesSummary';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { MotionConfig } from 'framer-motion';
 
-// --- MAIN APP ---
-function App() {
-  return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/owner" element={
-            <ProtectedRoute roles={['OWNER']}>
-              <OwnerDashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/analyst" element={
-            <ProtectedRoute roles={['ANALYST']}>
-              <AnalystDashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/staff" element={
-            <ProtectedRoute roles={['STAFF']}>
-              <StaffDashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin" element={
-            <ProtectedRoute roles={['ADMIN']}>
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/view-users" element={
-            <ProtectedRoute roles={['ADMIN']}>
-              <AdminViewUsers />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/create-user" element={
-            <ProtectedRoute roles={['ADMIN']}>
-              <AdminCreateUser />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/edit-user" element={
-            <ProtectedRoute roles={['ADMIN']}>
-              <AdminEditUser />
-            </ProtectedRoute>
-          } />
-          <Route path="/sales-records" element={
-            <ProtectedRoute roles={['ANALYST']}>
-              <SalesRecords />
-            </ProtectedRoute>
-          } />
-          <Route path="/owner/sales-summary" element={
-            <ProtectedRoute roles={['OWNER']}>
-              <OwnerSalesSummary />
-            </ProtectedRoute>
-          } />
-          <Route path="/owner/alerts" element={
-            <ProtectedRoute roles={['OWNER']}>
-              <OwnerAlerts />
-            </ProtectedRoute>
-          } />
-          <Route path="/owner/forecasts" element={
-            <ProtectedRoute roles={['OWNER']}>
-              <OwnerFiveDayForecast />
-            </ProtectedRoute>
-          } />
-          <Route path="/owner/customer-segments" element={
-            <ProtectedRoute roles={['OWNER']}>
-              <OwnerCustomerSegments />
-            </ProtectedRoute>
-          } />
-          <Route path="/owner/inventory" element={
-            <ProtectedRoute roles={['OWNER']}>
-              <OwnerInventory />
-            </ProtectedRoute>
-          } />
-          <Route path="/compare-periods" element={
-            <ProtectedRoute roles={['ANALYST', 'OWNER']}>
-              <CompareTimePeriods />
-            </ProtectedRoute>
-          } />
-          <Route path="/analyst/abnormal-drops" element={
-            <ProtectedRoute roles={['ANALYST']}>
-              <AnalystAbnormalDrops />
-            </ProtectedRoute>
-          } />
-          <Route path="/dropped-status" element={
-            <ProtectedRoute roles={['OWNER', 'ANALYST']}>
-              <DroppedStatus />
-            </ProtectedRoute>
-          } />
-          <Route path="/staff/operations" element={
-            <ProtectedRoute roles={['STAFF']}>
-              <StaffOperations />
-            </ProtectedRoute>
-          } />
-          <Route path="/staff/inventory" element={
-            <ProtectedRoute roles={['STAFF']}>
-              <OwnerInventory />
-             </ProtectedRoute>
-          } />
-          <Route path="/staff/sales-summary" element={
-            <ProtectedRoute roles={['STAFF']}>
-              <StaffSalesSummary />
-            </ProtectedRoute>
-          } />
-          <Route path="/" element={<Navigate to="/login" />} />
-        </Routes>
-      </Router>
-    </AuthProvider>
-  );
+import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { AppShell } from './components/layout/AppShell';
+import { EASE } from './lib/motion';
+
+import { LoginPage } from './pages/LoginPage';
+import { Overview } from './pages/Overview';
+import { Forecasts } from './pages/Forecasts';
+import { ForecastDetail } from './pages/ForecastDetail';
+import { Anomalies } from './pages/Anomalies';
+import { Inventory } from './pages/Inventory';
+import { Sales } from './pages/Sales';
+import { Compare } from './pages/Compare';
+import { Customers } from './pages/Customers';
+import { DataStudio } from './pages/DataStudio';
+import { Team } from './pages/Team';
+import { Settings } from './pages/Settings';
+import { NotFound } from './pages/NotFound';
+
+/**
+ * Routing.
+ *
+ * The old router had twenty flat, role-prefixed paths (/owner/forecasts,
+ * /analyst/abnormal-drops, /staff/sales-summary) that pointed at near-duplicate
+ * pages. This version has one canonical URL per concept, guarded by role, with
+ * every legacy path redirected so old links and bookmarks still land correctly.
+ */
+
+const LEGACY_REDIRECTS = [
+  ['/owner', '/overview'],
+  ['/analyst', '/overview'],
+  ['/staff', '/overview'],
+  ['/admin', '/overview'],
+  ['/owner/forecasts', '/forecasts'],
+  ['/owner/alerts', '/anomalies'],
+  ['/analyst/abnormal-drops', '/anomalies'],
+  ['/dropped-status', '/anomalies?tab=status'],
+  ['/owner/inventory', '/inventory'],
+  ['/staff/inventory', '/inventory'],
+  ['/owner/sales-summary', '/sales'],
+  ['/staff/sales-summary', '/sales'],
+  ['/sales-records', '/sales'],
+  ['/compare-periods', '/sales/compare'],
+  ['/owner/customer-segments', '/customers'],
+  ['/staff/operations', '/inventory?tab=restock'],
+  ['/admin/view-users', '/team'],
+  ['/admin/create-user', '/team?tab=invite'],
+  ['/admin/edit-user', '/team?tab=manage'],
+];
+
+function guarded(element, roles) {
+  return <ProtectedRoute roles={roles}>{element}</ProtectedRoute>;
 }
 
-export default App;
+export default function App() {
+  return (
+    <ThemeProvider>
+      {/* One easing curve for the whole app unless a component asks otherwise. */}
+      <MotionConfig transition={{ ease: EASE }} reducedMotion="user">
+        <ToastProvider>
+          <BrowserRouter>
+            <AuthProvider>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+
+                <Route
+                  element={
+                    <ProtectedRoute>
+                      <AppShell />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route path="/overview" element={<Overview />} />
+
+                  <Route path="/forecasts" element={guarded(<Forecasts />, ['OWNER', 'ANALYST', 'ADMIN'])} />
+                  <Route
+                    path="/forecasts/:product"
+                    element={guarded(<ForecastDetail />, ['OWNER', 'ANALYST', 'ADMIN'])}
+                  />
+                  <Route path="/anomalies" element={guarded(<Anomalies />, ['OWNER', 'ANALYST', 'ADMIN'])} />
+
+                  <Route path="/inventory" element={guarded(<Inventory />, ['OWNER', 'STAFF', 'ADMIN'])} />
+                  <Route path="/sales" element={<Sales />} />
+                  <Route path="/sales/compare" element={guarded(<Compare />, ['OWNER', 'ANALYST', 'ADMIN'])} />
+                  <Route path="/customers" element={<Customers />} />
+
+                  <Route path="/data" element={guarded(<DataStudio />, ['STAFF', 'ANALYST', 'ADMIN'])} />
+                  <Route path="/team" element={guarded(<Team />, ['ADMIN'])} />
+                  <Route path="/settings" element={<Settings />} />
+
+                  {LEGACY_REDIRECTS.map(([from, to]) => (
+                    <Route key={from} path={from} element={<Navigate to={to} replace />} />
+                  ))}
+
+                  <Route path="/" element={<Navigate to="/overview" replace />} />
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Routes>
+            </AuthProvider>
+          </BrowserRouter>
+        </ToastProvider>
+      </MotionConfig>
+    </ThemeProvider>
+  );
+}

@@ -2,12 +2,357 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Hide scrollbars but keep scrolling functional */
-* {
-  -ms-overflow-style: none; /* IE and old Edge */
-  scrollbar-width: none; /* Firefox */
+/* ==========================================================================
+   SmartSales design tokens
+   Colours are stored as raw "R G B" triplets so Tailwind can apply opacity
+   modifiers to them. Chart series and status colours come from a palette that
+   was validated for colour-vision deficiency against these exact surfaces.
+   ========================================================================== */
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --canvas: 246 244 239;      /* #F6F4EF warm paper */
+  --panel: 255 255 255;
+  --raised: 250 249 246;
+  --sunken: 241 238 231;
+  --hairline: 18 23 34;       /* used at low alpha */
+
+  --ink: 16 22 33;
+  --ink-soft: 61 72 89;
+  --ink-muted: 106 118 137;
+  --ink-faint: 143 154 172;
+
+  /* Brand accent: UI chrome only (buttons, focus, active nav) */
+  --honey: 168 106 0;         /* #A86A00 — passes text contrast on paper */
+  --honey-strong: 138 86 0;
+  --honey-ink: 255 255 255;
+
+  /* Status — reserved meanings, always paired with an icon + label */
+  --status-good: 12 163 12;
+  --status-warning: 250 178 25;
+  --status-serious: 236 131 90;
+  --status-critical: 208 59 59;
+
+  /* Categorical series (validated, surface #FFFFFF) */
+  --series-1: 42 120 214;     /* #2a78d6 blue   */
+  --series-2: 235 104 52;     /* #eb6834 orange */
+  --series-3: 27 175 122;     /* #1baf7a aqua   */
+
+  /* Ordinal ramp for RFM tiers (validated, light).
+     Anchored away from the surface: slot 1 is the strongest tier, so on a white
+     page it is the darkest step. The dark theme flips this anchor. */
+  --ordinal-1: #104281;
+  --ordinal-2: #1c5cab;
+  --ordinal-3: #2a78d6;
+  --ordinal-4: #5598e7;
+  --ordinal-5: #86b6ef;
+
+  --grid-line: rgba(18, 23, 34, 0.055);
+  --grid-major: rgba(18, 23, 34, 0.075);
+  --bloom-a: rgba(214, 150, 40, 0.16);
+  --bloom-b: rgba(42, 120, 214, 0.12);
+  --grain-opacity: 0.032;
+  --ridge-stroke: rgba(18, 23, 34, 0.05);
+
+  --shadow-card: 0 1px 2px rgba(18, 23, 34, 0.05), 0 8px 24px -12px rgba(18, 23, 34, 0.14);
+  --shadow-lift: 0 2px 4px rgba(18, 23, 34, 0.06), 0 18px 40px -18px rgba(18, 23, 34, 0.24);
+  --shadow-glow: 0 0 0 1px rgba(168, 106, 0, 0.25), 0 8px 30px -10px rgba(168, 106, 0, 0.3);
 }
 
-*::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --canvas: 11 14 20;         /* #0B0E14 deep ink */
+  --panel: 18 23 34;          /* #121722 — the validated dark chart surface */
+  --raised: 24 32 46;
+  --sunken: 14 18 27;
+  --hairline: 255 255 255;
+
+  --ink: 232 236 244;
+  --ink-soft: 176 187 205;
+  --ink-muted: 138 150 172;
+  --ink-faint: 100 112 134;
+
+  --honey: 255 184 77;        /* #FFB84D */
+  --honey-strong: 255 202 122;
+  --honey-ink: 26 18 4;
+
+  --status-good: 12 163 12;
+  --status-warning: 250 178 25;
+  --status-serious: 236 131 90;
+  --status-critical: 208 59 59;
+
+  /* Categorical series (validated, surface #121722) */
+  --series-1: 57 135 229;     /* #3987e5 */
+  --series-2: 217 89 38;      /* #d95926 */
+  --series-3: 25 158 112;     /* #199e70 */
+
+  /* Ordinal ramp for RFM tiers (validated, dark) */
+  --ordinal-1: #b7d3f6;
+  --ordinal-2: #86b6ef;
+  --ordinal-3: #5598e7;
+  --ordinal-4: #2a78d6;
+  --ordinal-5: #1c5cab;
+
+  --grid-line: rgba(255, 255, 255, 0.035);
+  --grid-major: rgba(255, 255, 255, 0.055);
+  --bloom-a: rgba(255, 184, 77, 0.1);
+  --bloom-b: rgba(57, 135, 229, 0.09);
+  --grain-opacity: 0.05;
+  --ridge-stroke: rgba(255, 255, 255, 0.045);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px -14px rgba(0, 0, 0, 0.7);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.45), 0 24px 50px -20px rgba(0, 0, 0, 0.8);
+  --shadow-glow: 0 0 0 1px rgba(255, 184, 77, 0.3), 0 10px 34px -12px rgba(255, 184, 77, 0.3);
+}
+
+/* Honour the OS preference until the user picks a side explicitly. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --canvas: 11 14 20;
+    --panel: 18 23 34;
+    --raised: 24 32 46;
+    --sunken: 14 18 27;
+    --hairline: 255 255 255;
+    --ink: 232 236 244;
+    --ink-soft: 176 187 205;
+    --ink-muted: 138 150 172;
+    --ink-faint: 100 112 134;
+    --honey: 255 184 77;
+    --honey-strong: 255 202 122;
+    --honey-ink: 26 18 4;
+    --series-1: 57 135 229;
+    --series-2: 217 89 38;
+    --series-3: 25 158 112;
+    --ordinal-1: #b7d3f6;
+    --ordinal-2: #86b6ef;
+    --ordinal-3: #5598e7;
+    --ordinal-4: #2a78d6;
+    --ordinal-5: #1c5cab;
+    --grid-line: rgba(255, 255, 255, 0.035);
+    --grid-major: rgba(255, 255, 255, 0.055);
+    --bloom-a: rgba(255, 184, 77, 0.1);
+    --bloom-b: rgba(57, 135, 229, 0.09);
+    --grain-opacity: 0.05;
+    --ridge-stroke: rgba(255, 255, 255, 0.045);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px -14px rgba(0, 0, 0, 0.7);
+    --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.45), 0 24px 50px -20px rgba(0, 0, 0, 0.8);
+    --shadow-glow: 0 0 0 1px rgba(255, 184, 77, 0.3), 0 10px 34px -12px rgba(255, 184, 77, 0.3);
+  }
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+@layer base {
+  * {
+    border-color: rgb(var(--hairline) / 0.1);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-canvas font-sans antialiased;
+    color: rgb(var(--ink));
+    /* Theme swaps should feel like a dimmer, not a strobe. */
+    transition: background-color 300ms ease, color 300ms ease;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display;
+    letter-spacing: -0.02em;
+  }
+
+  /* Columns of figures only line up with tabular figures. */
+  th, td, .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--honey));
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* The previous build hid scrollbars entirely, which removed the only cue
+     that a table had more rows. These are slim but visible. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--hairline) / 0.22) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--hairline) / 0.18);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--hairline) / 0.3);
+    background-clip: content-box;
+  }
+}
+
+/* ==========================================================================
+   Backdrop
+   Four stacked layers — engraved grid, drifting topographic ridges, two soft
+   light pools, and film grain. Everything animates on transform/opacity only.
+   ========================================================================== */
+
+@layer components {
+  .backdrop-root {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .backdrop-grid {
+    position: absolute;
+    inset: -10%;
+    background-image:
+      linear-gradient(to right, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 128px 128px, 128px 128px, 16px 16px, 16px 16px;
+    /* Dissolve the grid downward so content near the fold sits on clean paper. */
+    -webkit-mask-image: radial-gradient(115% 85% at 50% 0%, #000 25%, transparent 78%);
+    mask-image: radial-gradient(115% 85% at 50% 0%, #000 25%, transparent 78%);
+  }
+
+  .backdrop-bloom {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(90px);
+    will-change: transform;
+  }
+
+  .backdrop-bloom-a {
+    width: 46vw;
+    height: 46vw;
+    min-width: 380px;
+    min-height: 380px;
+    top: -14vw;
+    right: -10vw;
+    background: var(--bloom-a);
+  }
+
+  .backdrop-bloom-b {
+    width: 40vw;
+    height: 40vw;
+    min-width: 320px;
+    min-height: 320px;
+    bottom: -16vw;
+    left: -8vw;
+    background: var(--bloom-b);
+  }
+
+  .backdrop-ridges {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 52vh;
+    opacity: 0.85;
+    -webkit-mask-image: linear-gradient(to top, #000 5%, transparent 95%);
+    mask-image: linear-gradient(to top, #000 5%, transparent 95%);
+  }
+
+  .backdrop-grain {
+    position: absolute;
+    inset: 0;
+    opacity: var(--grain-opacity);
+    /* Fractal noise kills the banding that large soft fills otherwise show. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+  }
+
+  /* ---- Surfaces ---------------------------------------------------------- */
+
+  .surface {
+    @apply rounded-card bg-panel;
+    border: 1px solid rgb(var(--hairline) / 0.09);
+    box-shadow: var(--shadow-card);
+  }
+
+  .surface-quiet {
+    @apply rounded-card;
+    background: rgb(var(--panel) / 0.7);
+    border: 1px solid rgb(var(--hairline) / 0.07);
+    backdrop-filter: blur(8px);
+  }
+
+  .surface-inset {
+    @apply rounded-xl;
+    background: rgb(var(--sunken) / 0.7);
+    border: 1px solid rgb(var(--hairline) / 0.06);
+  }
+
+  .hairline {
+    border-color: rgb(var(--hairline) / 0.09);
+  }
+
+  /* ---- Loading ----------------------------------------------------------- */
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: rgb(var(--hairline) / 0.06);
+    border-radius: 8px;
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--hairline) / 0.07),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  /* ---- Scroll affordance -------------------------------------------------- */
+
+  .scroll-fade {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent 100%);
+  }
+}
+
+/* ==========================================================================
+   Motion preferences
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .backdrop-bloom,
+  .backdrop-ridges {
+    animation: none !important;
+  }
 }

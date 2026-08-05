@@ -3,8 +3,35 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="description" content="SmartSales - Business Management Platform" />
+    <meta name="description" content="SmartSales — AI-powered sales intelligence for retail teams" />
+
+    <!-- Matches the two theme canvases so the browser chrome and the page agree. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F6F4EF" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B0E14" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Webfonts are a progressive enhancement: the CSS declares a full system
+         fallback stack, so the app still looks right offline. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Applied before first paint so a dark-theme user never sees a white flash. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('smartsales:theme');
+          if (stored === 'light' || stored === 'dark') {
+            document.documentElement.setAttribute('data-theme', stored);
+          }
+        } catch (e) {
+          /* private mode — fall back to the OS preference */
+        }
+      })();
+    </script>
+
     <title>SmartSales</title>
   </head>
   <body>

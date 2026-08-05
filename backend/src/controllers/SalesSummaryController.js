@@ -1,4 +1,6 @@
-import { supabase } from "../config/db.js";
+// Service-role client: daily_sales has RLS enabled, so the anon client this
+// used to import returned zero rows for every caller.
+import { supabaseAdmin as supabase } from "../config/db.js";
 
 export async function getSalesSummary(req, res){
   try {
