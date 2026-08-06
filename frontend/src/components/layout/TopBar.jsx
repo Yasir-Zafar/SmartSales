@@ -15,7 +15,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { initials, relativeTime } from '../../lib/format';
-import { ROLE_META } from '../../lib/nav';
+import { ROLE_META, canAccess } from '../../lib/nav';
 import { DURATION, EASE } from '../../lib/motion';
 import { IconButton } from '../ui/Button';
 import { RoleBadge, LiveDot } from '../ui/Badge';
@@ -43,6 +43,10 @@ export function TopBar({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const navigate = useNavigate();
+
+  // Staff has no anomaly-detection access — the bell must not offer a route
+  // the sidebar already hides, or clicking it lands on the wrong-role screen.
+  const canSeeAnomalies = canAccess(user?.role, '/anomalies');
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -102,23 +106,25 @@ export function TopBar({
 
         <IconButton icon={Search} label="Search" onClick={onOpenCommand} className="md:hidden" />
 
-        <Link
-          to="/anomalies"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-ink-soft transition-colors hover:bg-hairline/8 hover:text-ink"
-          aria-label={anomalyCount > 0 ? `${anomalyCount} anomaly alerts` : 'Alerts'}
-          title={anomalyCount > 0 ? `${anomalyCount} products flagged` : 'No active alerts'}
-        >
-          <Bell size={16} aria-hidden="true" />
-          {anomalyCount > 0 && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-critical px-1 text-[9px] font-bold text-white tabular"
-            >
-              {anomalyCount > 99 ? '99+' : anomalyCount}
-            </motion.span>
-          )}
-        </Link>
+        {canSeeAnomalies && (
+          <Link
+            to="/anomalies"
+            className="relative inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-ink-soft transition-colors hover:bg-hairline/8 hover:text-ink"
+            aria-label={anomalyCount > 0 ? `${anomalyCount} anomaly alerts` : 'Alerts'}
+            title={anomalyCount > 0 ? `${anomalyCount} products flagged` : 'No active alerts'}
+          >
+            <Bell size={16} aria-hidden="true" />
+            {anomalyCount > 0 && (
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-critical px-1 text-[9px] font-bold text-white tabular"
+              >
+                {anomalyCount > 99 ? '99+' : anomalyCount}
+              </motion.span>
+            )}
+          </Link>
+        )}
 
         <IconButton
           icon={isDark ? Sun : Moon}

@@ -2,12 +2,10 @@ import { supabaseAuth, supabaseAdmin } from '../config/db.js';
 import {
   COOKIE_ACCESS,
   COOKIE_REFRESH,
-  COOKIE_CSRF,
   ACCESS_TOKEN_TTL_SECONDS,
   accessCookieOptions,
   refreshCookieOptions,
   clearCookieOptions,
-  csrfCookieOptions,
   validatePasswordStrength,
 } from '../config/security.js';
 import { rotateCsrfCookie } from '../middleware/csrf.js';
@@ -56,7 +54,13 @@ function issueSession(res, { userId, email, role, name, tokenVersion, sessionId,
 function clearSessionCookies(res) {
   res.clearCookie(COOKIE_ACCESS, clearCookieOptions(accessCookieOptions()));
   res.clearCookie(COOKIE_REFRESH, clearCookieOptions(refreshCookieOptions()));
-  res.clearCookie(COOKIE_CSRF, clearCookieOptions(csrfCookieOptions()));
+  // Rotate rather than clear: this runs on the ordinary "not signed in yet"
+  // path too (an anonymous boot's refresh attempt), and the very next request
+  // is often the login submit itself. Deleting the CSRF cookie here left the
+  // SPA with nothing to send until an unrelated GET happened to reissue one —
+  // in practice, a hard refresh — which is why login could fail once and then
+  // "just work" a minute later.
+  rotateCsrfCookie(res);
 }
 
 /** Mirrors failures into the legacy table the admin tooling already reads. */
