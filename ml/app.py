@@ -398,6 +398,48 @@ def list_products():
     return {"products": sorted(S.ensembles.keys())}
 
 
+# NOTE: this MUST stay above /forecast/{product}. FastAPI matches routes in
+# registration order, so declaring it later let the {product} wildcard
+# capture "total-revenue" and 404 with "No trained model for
+# 'total-revenue'" — which silently broke the owner's revenue guard.
+@app.get("/forecast/total-revenue")
+def forecast_total_revenue():
+    """Compute total forecasted revenue across all products for the next 5 days."""
+    _require_data()
+    prod_prices = {}
+    grouped = S.df.groupby("product_name")["unit_price"].mean()
+    for name, price in grouped.items():
+        prod_prices[name] = float(price)
+
+    total_units = 0.0
+    total_revenue = 0.0
+    by_product = []
+    for product, ens in S.ensembles.items():
+        if product not in S.daily.columns or len(S.daily[product]) < SEQ_LEN:
+            continue
+        series = S.daily[product].values.astype(float)
+        pred = ens.predict(series[-SEQ_LEN:], len(series) - 1)["ensemble"]
+        units = float(pred.sum())
+        price = prod_prices.get(product, 0)
+        revenue = units * price
+        total_units += units
+        total_revenue += revenue
+        by_product.append({
+            "product": product,
+            "forecast_units_5d": round(units, 2),
+            "avg_price": round(price, 2),
+            "forecast_revenue": round(revenue, 2),
+        })
+
+    by_product.sort(key=lambda x: x["forecast_revenue"], reverse=True)
+    return {
+        "total_forecast_units": round(total_units, 2),
+        "total_forecast_revenue": round(total_revenue, 2),
+        "forecast_horizon_days": FORECAST_HORIZON,
+        "by_product": by_product,
+    }
+
+
 # ── Forecast: single product ──────────────────────────────────────────────────
 @app.get("/forecast/{product}")
 def get_forecast(product: str):
@@ -606,44 +648,6 @@ def inventory_risk(
     risks.sort(key=lambda r: (r["risk_level"]=="high", r["ensemble_total_5d"]), reverse=True)
     if level: risks = [r for r in risks if r["risk_level"] == level]
     return {"count": len(risks), "risks": risks}
-
-
-@app.get("/forecast/total-revenue")
-def forecast_total_revenue():
-    """Compute total forecasted revenue across all products for the next 5 days."""
-    _require_data()
-    prod_prices = {}
-    grouped = S.df.groupby("product_name")["unit_price"].mean()
-    for name, price in grouped.items():
-        prod_prices[name] = float(price)
-
-    total_units = 0.0
-    total_revenue = 0.0
-    by_product = []
-    for product, ens in S.ensembles.items():
-        if product not in S.daily.columns or len(S.daily[product]) < SEQ_LEN:
-            continue
-        series = S.daily[product].values.astype(float)
-        pred = ens.predict(series[-SEQ_LEN:], len(series) - 1)["ensemble"]
-        units = float(pred.sum())
-        price = prod_prices.get(product, 0)
-        revenue = units * price
-        total_units += units
-        total_revenue += revenue
-        by_product.append({
-            "product": product,
-            "forecast_units_5d": round(units, 2),
-            "avg_price": round(price, 2),
-            "forecast_revenue": round(revenue, 2),
-        })
-
-    by_product.sort(key=lambda x: x["forecast_revenue"], reverse=True)
-    return {
-        "total_forecast_units": round(total_units, 2),
-        "total_forecast_revenue": round(total_revenue, 2),
-        "forecast_horizon_days": FORECAST_HORIZON,
-        "by_product": by_product,
-    }
 
 
 # ── Metrics ───────────────────────────────────────────────────────────────────

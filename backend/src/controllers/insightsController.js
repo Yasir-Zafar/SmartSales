@@ -2,10 +2,23 @@ import { getMlBaseUrl, loadMeta, getHistoricalMeanDaily, abnormalDropAlert, conf
 import { appendAlertHistory, classifyAlertSeverity, getAlertHistory, getAlertThresholds, getLastAlertCount, resetAlertThreshold, setAlertThreshold, setLastAlertCount, getRevenueThreshold, setRevenueThreshold, resetRevenueThreshold } from '../utils/alertingStore.js';
 import { sendOwnerAnomalyCountChangeEmail } from '../utils/ownerAlertMailer.js';
 import { supabaseAdmin } from '../config/db.js';
+import { fetchAllRows } from '../utils/fetchAllRows.js';
+import { cached } from '../utils/cache.js';
 
 const TEST_ALERT_RECIPIENTS = ['dpix720@gmail.com', 'l233029@lhr.nu.edu.pk'];
 
-async function mlGet(path, query = {}) {
+/**
+ * The model service recomputes from a fixed in-memory dataset, so the same
+ * request returns the same answer until someone reloads it. Caching here makes
+ * every ML-backed endpoint fast after the first caller — which is what lets the
+ * app prefetch on sign-in and have each tab open instantly.
+ *
+ * Errors are never cached (see `cached`), so a service that is still warming up
+ * is retried rather than remembered as broken.
+ */
+const ML_CACHE_TTL_MS = 60_000;
+
+async function mlGet(path, query = {}, { ttlMs = ML_CACHE_TTL_MS } = {}) {
   const base = getMlBaseUrl().replace(/\/+$/, '');
   const url = new URL(`${base}${path.startsWith('/') ? '' : '/'}${path}`);
   Object.entries(query).forEach(([k, v]) => {
@@ -13,6 +26,10 @@ async function mlGet(path, query = {}) {
     url.searchParams.set(k, String(v));
   });
 
+  return cached(`ml:${url.toString()}`, ttlMs, () => mlFetch(url));
+}
+
+async function mlFetch(url) {
   const res = await fetch(url.toString());
   const text = await res.text();
   let data;
@@ -363,6 +380,18 @@ export async function ownerLatestForecasts(req, res) {
 
 export async function ownerLiveKpis(req, res) {
   try {
+    // Cached: this pages the whole sales table, and the owner overview re-polls
+    // every 30s. TTL matches that interval so a viewer never waits twice for
+    // the same scan, while an upload still shows up within half a minute.
+    const payload = await cached('owner:kpis:live', 30_000, () => computeOwnerLiveKpis());
+    return res.json(payload);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+async function computeOwnerLiveKpis() {
+  {
     const { data: latestSaleRow, error: latestSaleErr } = await supabaseAdmin
       .from('daily_sales')
       .select('sale_date')
@@ -370,7 +399,7 @@ export async function ownerLiveKpis(req, res) {
       .limit(1)
       .maybeSingle();
 
-    if (latestSaleErr) return res.status(400).json({ message: latestSaleErr.message });
+    if (latestSaleErr) throw new Error(latestSaleErr.message);
 
     const anchor = latestSaleRow?.sale_date ? new Date(String(latestSaleRow.sale_date).split('T')[0]) : new Date();
     const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1).toISOString().split('T')[0];
@@ -378,19 +407,40 @@ export async function ownerLiveKpis(req, res) {
     const prevMonthStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1).toISOString().split('T')[0];
     const prevMonthEnd = new Date(anchor.getFullYear(), anchor.getMonth(), 0).toISOString().split('T')[0];
 
-    const [{ data: allSales, error: allErr }, { data: currMonth, error: currErr }, { data: prevMonth, error: prevErr }, { data: latestUpload, error: uploadErr }] = await Promise.all([
-      supabaseAdmin.from('daily_sales').select('total_price, quantity, customer_id, product_id'),
-      supabaseAdmin.from('daily_sales').select('total_price, quantity, product_id').gte('sale_date', monthStart).lte('sale_date', monthEnd),
-      supabaseAdmin.from('daily_sales').select('total_price, quantity, product_id').gte('sale_date', prevMonthStart).lte('sale_date', prevMonthEnd),
+    // These three aggregate whole date ranges, so they must page past the
+    // 1000-row PostgREST cap — otherwise total revenue, units and the customer
+    // count are computed from an arbitrary 1000-row slice of the table.
+    const [allSales, currMonth, prevMonth, { data: latestUpload, error: uploadErr }] = await Promise.all([
+      fetchAllRows(() =>
+        supabaseAdmin
+          .from('daily_sales')
+          .select('total_price, quantity, customer_id, product_id')
+          .order('id', { ascending: true })
+      ),
+      fetchAllRows(() =>
+        supabaseAdmin
+          .from('daily_sales')
+          .select('total_price, quantity, product_id')
+          .gte('sale_date', monthStart)
+          .lte('sale_date', monthEnd)
+          .order('id', { ascending: true })
+      ),
+      fetchAllRows(() =>
+        supabaseAdmin
+          .from('daily_sales')
+          .select('total_price, quantity, product_id')
+          .gte('sale_date', prevMonthStart)
+          .lte('sale_date', prevMonthEnd)
+          .order('id', { ascending: true })
+      ),
       supabaseAdmin.from('csv_uploads').select('created_at, upload_date').order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ]);
 
-    const dbErr = allErr || currErr || prevErr || uploadErr;
-    if (dbErr) return res.status(400).json({ message: dbErr.message });
+    if (uploadErr) throw new Error(uploadErr.message);
 
-    const totalRevenue = (allSales || []).reduce((sum, row) => sum + Number(row.total_price || 0), 0);
-    const totalSales = (allSales || []).reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-    const activeCustomers = new Set((allSales || []).map((row) => row.customer_id).filter((id) => id != null)).size;
+    const totalRevenue = allSales.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
+    const totalSales = allSales.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+    const activeCustomers = new Set(allSales.map((row) => row.customer_id).filter((id) => id != null)).size;
     const totalProfit = 0;
     const profitMarginPct = 0;
 
@@ -406,7 +456,7 @@ export async function ownerLiveKpis(req, res) {
       ? Number((((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100).toFixed(1))
       : null;
 
-    return res.json({
+    return {
       updated_at: new Date().toISOString(),
       anchored_latest_sale_date: latestSaleRow?.sale_date || null,
       latest_upload_at: latestUpload?.created_at || latestUpload?.upload_date || null,
@@ -422,9 +472,7 @@ export async function ownerLiveKpis(req, res) {
         revenue_change_pct: revenueChangePct,
         profit_change_pct: profitChangePct,
       },
-    });
-  } catch (err) {
-    return res.status(500).json({ message: err.message });
+    };
   }
 }
 
@@ -490,45 +538,66 @@ export async function ownerCustomerSegments(req, res) {
       return res.status(400).json({ message: 'Invalid customer_id' });
     }
 
-    const { data: rows, error } = await supabaseAdmin
-      .from('daily_sales')
-      .select('customer_id, sale_date')
-      .order('customer_id', { ascending: true });
+    // Every field this endpoint returns is derived from the sales table, so it
+    // is computed in one cached scan.
+    //
+    // This previously issued one ML request PER CUSTOMER, sequentially — 128
+    // round-trips for a typical dataset. Worse, a failed call was swallowed
+    // silently, so if the model service was still warming up the loop skipped
+    // every customer and returned an empty list. The UI then said "no segments"
+    // after a long wait, and a later refresh (model now warm) worked. The tier
+    // label already came from the local ratio calculation, and the only ML
+    // fields used were purchase count and spend, both of which are plain
+    // aggregates of the same rows. So there is nothing here the model needs to
+    // answer, and the endpoint no longer depends on it being up.
+    // The finished list is cached, not just the raw scan: labelling walks every
+    // sales row, and repeating that per request cost ~1s even on a cache hit.
+    const allSegments = await cached('segments:computed', 60_000, async () => {
+      const rows = await fetchAllRows(() =>
+        supabaseAdmin
+          .from('daily_sales')
+          .select('customer_id, sale_date, transaction_id, total_price')
+          .order('id', { ascending: true })
+      );
 
-    if (error) {
-      return res.status(400).json({ message: error.message });
-    }
+      const labelMap = computeLabelsFromDB(rows);
 
-    const labelMap = computeLabelsFromDB(rows || []);
-
-    const customerIds = Object.keys(labelMap).map(Number).sort((a, b) => a - b);
-
-    const filteredIds = queryCustomerId != null
-      ? customerIds.filter((id) => id === queryCustomerId)
-      : customerIds;
-
-    if (queryCustomerId != null && filteredIds.length === 0) {
-      return res.status(404).json({ message: `Customer ${queryCustomerId} not found` });
-    }
-
-    const segments = [];
-    for (const customerId of filteredIds) {
-      try {
-        const seg = await mlGet(`/segments/${customerId}`);
-        const { label, recommendation } = labelMap[customerId] || { label: 'Lost', recommendation: 'Send a re-engagement campaign with a strong incentive.' };
-        segments.push({
-          customer_id: seg.customer_id,
-          segment_id: seg.segment_id,
-          segment_label: label,
-          recommendation,
-          total_purchases: seg.total_purchases,
-          total_spend: seg.total_spend,
-        });
-      } catch (err) {
-        if (queryCustomerId != null) {
-          return res.status(err.status || 500).json({ message: err.message });
-        }
+      // Purchases = distinct transactions (a basket is one purchase, not N lines).
+      const totals = {};
+      for (const row of rows) {
+        const cid = Number(row.customer_id);
+        if (!Number.isFinite(cid)) continue;
+        if (!totals[cid]) totals[cid] = { transactions: new Set(), spend: 0 };
+        if (row.transaction_id) totals[cid].transactions.add(String(row.transaction_id));
+        totals[cid].spend += Number(row.total_price || 0);
       }
+
+      const TIER_ORDER = ['Champions', 'Loyal Customers', 'Potential Loyalists', 'At Risk', 'Lost'];
+
+      return Object.keys(labelMap)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .map((customerId) => {
+          const { label, recommendation } = labelMap[customerId];
+          const agg = totals[customerId] || { transactions: new Set(), spend: 0 };
+          return {
+            customer_id: customerId,
+            // Kept for API compatibility; the tier's rank is the meaningful value.
+            segment_id: TIER_ORDER.indexOf(label),
+            segment_label: label,
+            recommendation,
+            total_purchases: agg.transactions.size,
+            total_spend: Number(agg.spend.toFixed(2)),
+          };
+        });
+    });
+
+    const segments = queryCustomerId != null
+      ? allSegments.filter((s) => s.customer_id === queryCustomerId)
+      : allSegments;
+
+    if (queryCustomerId != null && segments.length === 0) {
+      return res.status(404).json({ message: `Customer ${queryCustomerId} not found` });
     }
 
     return res.json({ segments });
@@ -735,16 +804,22 @@ export async function staffSalesSummary(req, res) {
       return null;
     };
 
-    // Read a broad set of sale_date values and anchor by parsed max date.
-    const { data: dateRows, error: latestErr } = await supabaseAdmin
-      .from('daily_sales')
-      .select('sale_date')
-      .limit(50000);
+    // Anchor on the newest/oldest sale_date directly rather than pulling every
+    // row to sort client-side. The old `.limit(50000)` also could not beat
+    // PostgREST's 1000-row cap, so the "latest day" was whichever date happened
+    // to fall in the first arbitrary 1000 rows.
+    const [{ data: maxRow, error: maxErr }, { data: minRow, error: minErr }, { count: dateCount }] = await Promise.all([
+      supabaseAdmin.from('daily_sales').select('sale_date').order('sale_date', { ascending: false }).limit(1).maybeSingle(),
+      supabaseAdmin.from('daily_sales').select('sale_date').order('sale_date', { ascending: true }).limit(1).maybeSingle(),
+      supabaseAdmin.from('daily_sales').select('*', { count: 'exact', head: true }),
+    ]);
 
+    const latestErr = maxErr || minErr;
     if (latestErr) return res.status(400).json({ message: latestErr.message });
-    const parsedDates = (dateRows || [])
-      .map((r) => normalizeSaleDate(r.sale_date))
-      .filter(Boolean);
+
+    const maxDate = normalizeSaleDate(maxRow?.sale_date);
+    const minDate = normalizeSaleDate(minRow?.sale_date);
+    const parsedDates = maxDate ? [minDate || maxDate, maxDate] : [];
 
     if (parsedDates.length === 0) {
       return res.json({
@@ -765,25 +840,27 @@ export async function staffSalesSummary(req, res) {
     const weekStartIso = weekStart.toISOString().split('T')[0];
 
     // Today's sales
-    const { data: todayData, error: todayError } = await supabaseAdmin
-      .from('daily_sales')
-      .select('total_price, quantity, product_name')
-      .gte('sale_date', todayIso)
-      .lt('sale_date', nextDayIso);
-
-    if (todayError) return res.status(400).json({ message: todayError.message });
+    const todayData = await fetchAllRows(() =>
+      supabaseAdmin
+        .from('daily_sales')
+        .select('total_price, quantity, product_name')
+        .gte('sale_date', todayIso)
+        .lt('sale_date', nextDayIso)
+        .order('id', { ascending: true })
+    );
 
     const todayRevenue = todayData.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
     const todayTransactions = todayData.length;
 
-    // Week's sales
-    const { data: weekData, error: weekError } = await supabaseAdmin
-      .from('daily_sales')
-      .select('sale_date, total_price, quantity, product_name')
-      .gte('sale_date', weekStartIso)
-      .lte('sale_date', todayIso);
-
-    if (weekError) return res.status(400).json({ message: weekError.message });
+    // Week's sales — seven days of a busy shop exceeds 1000 rows easily.
+    const weekData = await fetchAllRows(() =>
+      supabaseAdmin
+        .from('daily_sales')
+        .select('sale_date, total_price, quantity, product_name')
+        .gte('sale_date', weekStartIso)
+        .lte('sale_date', todayIso)
+        .order('id', { ascending: true })
+    );
 
     const weekRevenue = weekData.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
     const weekTransactions = weekData.length;
@@ -830,7 +907,8 @@ export async function staffSalesSummary(req, res) {
     return res.json({
       source: {
         anchor_date: todayIso,
-        parsed_dates_count: parsedDates.length,
+        // Real row count from the server, not the length of a client-side sample.
+        parsed_dates_count: dateCount ?? 0,
         min_date: parsedDates[0],
         max_date: parsedDates[parsedDates.length - 1],
       },

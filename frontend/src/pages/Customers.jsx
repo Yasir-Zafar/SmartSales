@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Sparkles, Search, RefreshCw, ShoppingBag, PieChart, UserSearch } from 'lucide-react';
 
-import { api, errorMessage, isMlUnavailable } from '../lib/api';
+import { errorMessage, isMlUnavailable } from '../lib/api';
+import { loadGet } from '../lib/dataCache';
 import { money, num, titleCase } from '../lib/format';
 import { staggerParent } from '../lib/motion';
 import { useAuth } from '../context/AuthContext';
@@ -71,13 +72,13 @@ export function Customers() {
   const [upsellLoading, setUpsellLoading] = useState(false);
   const [upsellError, setUpsellError] = useState('');
 
-  const loadProfiles = useCallback(async () => {
+  const loadProfiles = useCallback(async (force = false) => {
     if (!canSeeSegmentProfiles) return;
     setLoadingProfiles(true);
     setMlDown(false);
     try {
-      const res = await api.get('/insights/analyst/segments');
-      setProfiles(res.data?.segments || []);
+      const data = await loadGet('segments:profiles', '/insights/analyst/segments', undefined, { force });
+      setProfiles(data?.segments || []);
     } catch (err) {
       setMlDown(isMlUnavailable(err));
       setProfiles([]);
@@ -86,13 +87,13 @@ export function Customers() {
     }
   }, [canSeeSegmentProfiles]);
 
-  const loadMembers = useCallback(async () => {
+  const loadMembers = useCallback(async (force = false) => {
     if (!canSeeSegmentTable) return;
     setLoadingMembers(true);
     setError('');
     try {
-      const res = await api.get('/insights/owner/customer-segments');
-      setMembers(res.data?.segments || []);
+      const data = await loadGet('segments:members', '/insights/owner/customer-segments', undefined, { force });
+      setMembers(data?.segments || []);
     } catch (err) {
       setMlDown(isMlUnavailable(err));
       setError(errorMessage(err, 'Could not load customer segments'));
@@ -119,8 +120,8 @@ export function Customers() {
     setUpsellError('');
     setUpsell(null);
     try {
-      const res = await api.get(`/insights/staff/customers/${id}/upsell`);
-      setUpsell(res.data);
+      const data = await loadGet(`upsell:${id}`, `/insights/staff/customers/${id}/upsell`);
+      setUpsell(data);
     } catch (err) {
       setUpsellError(errorMessage(err, 'No recommendation available for that customer'));
     } finally {
@@ -211,8 +212,8 @@ export function Customers() {
             size="sm"
             icon={RefreshCw}
             onClick={() => {
-              loadProfiles();
-              loadMembers();
+              loadProfiles(true);
+              loadMembers(true);
             }}
             loading={loading}
           >

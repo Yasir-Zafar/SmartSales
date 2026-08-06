@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Boxes, PackageSearch, ClipboardList, RefreshCw, AlertOctagon, CheckCircle2, Layers } from 'lucide-react';
 
-import { api, errorMessage, isMlUnavailable } from '../lib/api';
+import { errorMessage, isMlUnavailable } from '../lib/api';
+import { loadGet } from '../lib/dataCache';
 import { money, num, titleCase } from '../lib/format';
 import { staggerParent, staggerChild } from '../lib/motion';
 import { useTabParam } from '../hooks/useTabParam';
@@ -56,12 +57,12 @@ export function Inventory() {
   const [category, setCategory] = useState('');
   const [riskLevel, setRiskLevel] = useState('all');
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (force = false) => {
     setLoadingProducts(true);
     setProductsError('');
     try {
-      const res = await api.get('/products');
-      setProducts(res.data?.products || []);
+      const data = await loadGet('products', '/products', undefined, { force });
+      setProducts(data?.products || []);
     } catch (err) {
       setProductsError(errorMessage(err, 'Could not load the product catalog'));
     } finally {
@@ -69,12 +70,12 @@ export function Inventory() {
     }
   }, []);
 
-  const loadRisks = useCallback(async () => {
+  const loadRisks = useCallback(async (force = false) => {
     setLoadingRisks(true);
     setRisksMlDown(false);
     try {
-      const res = await api.get('/insights/staff/inventory/risk');
-      setRisks(res.data?.risks || []);
+      const data = await loadGet('inventory:risk', '/insights/staff/inventory/risk', undefined, { force });
+      setRisks(data?.risks || []);
     } catch (err) {
       setRisksMlDown(isMlUnavailable(err));
       setRisks([]);
@@ -149,8 +150,8 @@ export function Inventory() {
             size="sm"
             icon={RefreshCw}
             onClick={() => {
-              loadProducts();
-              loadRisks();
+              loadProducts(true);
+              loadRisks(true);
             }}
             loading={loadingProducts || loadingRisks}
           >

@@ -74,6 +74,9 @@ export function Compare() {
         endDate,
         product: productFilter ? [productFilter] : [],
         category: categoryFilter ? [categoryFilter] : [],
+        // Both periods are reduced to totals and a ranked diff, so they need
+        // every matching row; nothing here renders per-row.
+        limit: 0,
       },
     });
     return res.data?.records || [];

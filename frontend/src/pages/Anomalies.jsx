@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { api, errorMessage, isMlUnavailable } from '../lib/api';
+import { loadGet, invalidate } from '../lib/dataCache';
 import { money, num, titleCase, date } from '../lib/format';
 import { staggerParent, staggerChild } from '../lib/motion';
 import { useAuth } from '../context/AuthContext';
@@ -86,23 +87,23 @@ export function Anomalies() {
   const [statusQuery, setStatusQuery] = useState('');
   const [timeframe, setTimeframe] = useState('24h');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     setError('');
     setMlDown(false);
 
     try {
-      const [alertsRes, statusRes, historyRes] = await Promise.all([
-        api.get('/insights/alerts/notifications/abnormal-drops', {
+      const [alertsData, statusData, historyData] = await Promise.all([
+        loadGet('anomalies:active', '/insights/alerts/notifications/abnormal-drops', {
           params: isOwnerLike ? { notify_owner: true } : undefined,
-        }),
-        api.get('/insights/alerts/dropped-status'),
-        api.get('/insights/alerts/history/abnormal-drops', { params: { limit: 2000 } }),
+        }, { force }),
+        loadGet('anomalies:status', '/insights/alerts/dropped-status', undefined, { force }),
+        loadGet('anomalies:history', '/insights/alerts/history/abnormal-drops', { params: { limit: 2000 } }, { force }),
       ]);
 
-      setAlerts(alertsRes.data?.alerts || []);
-      setStatuses(statusRes.data?.statuses || []);
-      setHistory(historyRes.data?.history || []);
+      setAlerts(alertsData?.alerts || []);
+      setStatuses(statusData?.statuses || []);
+      setHistory(historyData?.history || []);
     } catch (err) {
       setMlDown(isMlUnavailable(err));
       setError(errorMessage(err, 'Could not load anomaly data'));
@@ -151,7 +152,8 @@ export function Anomalies() {
         threshold_pct: Number(thresholdInput),
       });
       toast.success('Threshold updated', `Products are flagged once they drop ${thresholdInput}% below baseline.`);
-      await load();
+      invalidate('anomalies:');
+      await load(true);
     } catch (err) {
       toast.error('Could not save the threshold', errorMessage(err));
     } finally {
@@ -164,7 +166,8 @@ export function Anomalies() {
     try {
       await api.delete('/insights/owner/alerts/abnormal-drops/thresholds');
       toast.info('Threshold reset', 'Back to the 20% default.');
-      await load();
+      invalidate('anomalies:');
+      await load(true);
     } catch (err) {
       toast.error('Could not reset the threshold', errorMessage(err));
     } finally {
@@ -269,7 +272,7 @@ export function Anomalies() {
         title="Anomaly monitor"
         description="Products whose predicted five-day demand falls meaningfully below their usual baseline, plus the thresholds that decide what counts as a problem."
         actions={
-          <Button size="sm" icon={RefreshCw} onClick={load} loading={loading}>
+          <Button size="sm" icon={RefreshCw} onClick={() => load(true)} loading={loading}>
             Refresh
           </Button>
         }

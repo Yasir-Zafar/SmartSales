@@ -1,4 +1,6 @@
 import { supabaseAdmin } from '../config/db.js';
+import { fetchAllRows } from '../utils/fetchAllRows.js';
+import { invalidateCache } from '../utils/cache.js';
 
 function stableCustomerId(transactionId) {
   const s = String(transactionId);
@@ -56,16 +58,19 @@ export async function exportTrainingCsv(req, res) {
       return res.status(400).json({ message: 'startDate and endDate are required (YYYY-MM-DD)' });
     }
 
-    const { data: records, error } = await supabaseAdmin
-      .from('daily_sales')
-      .select('*')
-      .gte('sale_date', startDate)
-      .lte('sale_date', endDate)
-      .order('sale_date', { ascending: true });
+    // Paginated: an unpaginated select caps at PostgREST's 1000-row limit, which
+    // silently trained the model on a fraction of the window the analyst chose.
+    const records = await fetchAllRows(() =>
+      supabaseAdmin
+        .from('daily_sales')
+        .select('*')
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+        .order('sale_date', { ascending: true })
+        .order('id', { ascending: true })
+    );
 
-    if (error) return res.status(400).json({ message: error.message });
-
-    const csv = buildTrainingCsvRows(records || []);
+    const csv = buildTrainingCsvRows(records);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader(
       'Content-Disposition',
@@ -100,15 +105,17 @@ export async function retrainReloadMl(req, res) {
       return res.status(400).json({ message: 'startDate and endDate are required (YYYY-MM-DD)' });
     }
 
-    const { data: records, error } = await supabaseAdmin
-      .from('daily_sales')
-      .select('*')
-      .gte('sale_date', startDate)
-      .lte('sale_date', endDate)
-      .order('sale_date', { ascending: true });
+    const records = await fetchAllRows(() =>
+      supabaseAdmin
+        .from('daily_sales')
+        .select('*')
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+        .order('sale_date', { ascending: true })
+        .order('id', { ascending: true })
+    );
 
-    if (error) return res.status(400).json({ message: error.message });
-    if (!records?.length) return res.status(400).json({ message: 'No rows in that date range' });
+    if (!records.length) return res.status(400).json({ message: 'No rows in that date range' });
 
     const csv = buildTrainingCsvRows(records);
     const mlBase = (process.env.ML_BASE_URL || 'http://localhost:8000').replace(/\/+$/, '');
@@ -131,6 +138,9 @@ export async function retrainReloadMl(req, res) {
       const msg = payload?.detail || payload?.message || 'ML reload failed';
       return res.status(400).json({ message: msg, ml: payload });
     }
+
+    // The model now holds different data, so every cached ML answer is stale.
+    invalidateCache();
 
     return res.json({
       message: 'ML service reloaded with exported daily_sales data',

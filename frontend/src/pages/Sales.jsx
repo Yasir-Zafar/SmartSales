@@ -87,6 +87,8 @@ function RecordsExplorer() {
   const navigate = useNavigate();
 
   const [records, setRecords] = useState([]);
+  const [serverTotals, setServerTotals] = useState(null);
+  const [matchInfo, setMatchInfo] = useState({ total: 0, truncated: false });
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -100,6 +102,7 @@ function RecordsExplorer() {
   const [sortBy, setSortBy] = useState('time');
   const [order, setOrder] = useState('desc');
   const [showFilters, setShowFilters] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -117,9 +120,15 @@ function RecordsExplorer() {
         },
       });
       setRecords(res.data?.records || []);
+      // Totals come from the server, computed over every matching row — the
+      // response itself is capped, so summing what arrived would under-report.
+      setServerTotals(res.data?.totals || null);
+      setMatchInfo({ total: res.data?.total ?? 0, truncated: Boolean(res.data?.truncated) });
     } catch (err) {
       setError(errorMessage(err, 'Could not load sales records'));
       setRecords([]);
+      setServerTotals(null);
+      setMatchInfo({ total: 0, truncated: false });
     } finally {
       setLoading(false);
     }
@@ -140,23 +149,19 @@ function RecordsExplorer() {
   }, [sortBy, order]);
 
   /**
-   * The old owner page hid these totals behind an "Estimate" button that
-   * re-ran the same query. They are derived from whatever is on screen, so they
-   * are simply always shown.
+   * The old owner page hid these totals behind an "Estimate" button that re-ran
+   * the same query. They are always shown now, and they reflect every matching
+   * row rather than just the page that was sent down.
    */
   const totals = useMemo(() => {
-    const revenue = records.reduce((sum, row) => sum + parseFloat(row.total_price || 0), 0);
-    const units = records.reduce((sum, row) => sum + (row.quantity || 0), 0);
-    const transactions = new Set(records.map((row) => row.transaction_id)).size;
-    const products = new Set(records.map((row) => row.product_name)).size;
-    return {
-      revenue,
-      units,
-      transactions,
-      products,
-      averageUnitRevenue: units > 0 ? revenue / units : 0,
+    const base = serverTotals || {
+      revenue: records.reduce((sum, row) => sum + parseFloat(row.total_price || 0), 0),
+      units: records.reduce((sum, row) => sum + (row.quantity || 0), 0),
+      transactions: new Set(records.map((row) => row.transaction_id)).size,
+      products: new Set(records.map((row) => row.product_name)).size,
     };
-  }, [records]);
+    return { ...base, averageUnitRevenue: base.units > 0 ? base.revenue / base.units : 0 };
+  }, [records, serverTotals]);
 
   const trend = useMemo(() => {
     const byDate = {};
@@ -182,11 +187,35 @@ function RecordsExplorer() {
       .slice(0, 8);
   }, [records]);
 
-  const exportCsv = () => {
+  const exportCsv = async () => {
     if (!records.length) return;
+    setExporting(true);
+    // limit=0 asks the server for every matching row, so a download is complete
+    // even though the on-screen table is capped.
+    let full = records;
+    try {
+      const res = await api.get('/csv/records', {
+        params: {
+          sortBy,
+          order,
+          product: productFilters.filter(Boolean),
+          category: [category, ...categoryFilters].filter(Boolean),
+          transaction: transactionFilters.filter(Boolean),
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          limit: 0,
+        },
+      });
+      full = res.data?.records || records;
+    } catch {
+      toast.warning('Exporting what is on screen', 'Could not fetch the full result set.');
+    } finally {
+      setExporting(false);
+    }
+
     const csv = toCsv(
       ['Date', 'Transaction', 'Product', 'Category', 'Quantity', 'Unit price', 'Total'],
-      records.map((row) => [
+      full.map((row) => [
         row.sale_date,
         row.transaction_id,
         row.product_name,
@@ -198,7 +227,7 @@ function RecordsExplorer() {
     );
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     downloadBlob(new Blob([csv], { type: 'text/csv;charset=utf-8;' }), `smartsales-records-${stamp}.csv`);
-    toast.success('Export ready', `${num(records.length)} rows downloaded.`);
+    toast.success('Export ready', `${num(full.length)} rows downloaded.`);
   };
 
   const resetFilters = () => {
@@ -305,8 +334,8 @@ function RecordsExplorer() {
           <Button size="sm" icon={RotateCcw} onClick={resetFilters}>
             Reset
           </Button>
-          <Button size="sm" icon={Download} onClick={exportCsv} disabled={!records.length}>
-            Export {records.length ? `${num(records.length)} rows` : 'CSV'}
+          <Button size="sm" icon={Download} onClick={exportCsv} disabled={!records.length} loading={exporting}>
+            Export {matchInfo.total ? `${num(matchInfo.total)} rows` : 'CSV'}
           </Button>
           <Button size="sm" variant="ghost" icon={GitCompareArrows} onClick={() => navigate('/sales/compare')}>
             Compare two periods
@@ -348,7 +377,13 @@ function RecordsExplorer() {
       <Card animate={false}>
         <CardHeader
           title="Sales records"
-          description={loading ? 'Loading…' : `${num(records.length)} rows match the current filters.`}
+          description={
+            loading
+              ? 'Loading…'
+              : matchInfo.truncated
+                ? `${num(matchInfo.total)} rows match. Showing the most recent ${num(records.length)} — narrow the dates to see the rest, or export for everything.`
+                : `${num(matchInfo.total || records.length)} rows match the current filters.`
+          }
           icon={Receipt}
         />
         <div className="mt-4">

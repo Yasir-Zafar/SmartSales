@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { TrendingUp, Search, ArrowRight, RefreshCw, Package, Layers } from 'lucide-react';
 
-import { api, errorMessage, isMlUnavailable } from '../lib/api';
+import { errorMessage, isMlUnavailable } from '../lib/api';
+import { loadGet } from '../lib/dataCache';
 import { num, titleCase } from '../lib/format';
 import { staggerParent, staggerChild } from '../lib/motion';
 import { useAuth } from '../context/AuthContext';
@@ -48,20 +49,20 @@ export function Forecasts() {
 
   const endpoint = user?.role === 'ANALYST' ? '/insights/analyst/forecasts' : '/insights/owner/forecasts';
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     setError('');
     setMlDown(false);
 
     try {
-      const res = await api.get(endpoint, { params: { limit, sort_by: sortBy } });
-      setRows(res.data?.forecasts || []);
+      const data = await loadGet(`forecasts:${endpoint}:${limit}:${sortBy}`, endpoint, { params: { limit, sort_by: sortBy } }, { force });
+      setRows(data?.forecasts || []);
     } catch (primaryError) {
       // Fall back to the last persisted batch so the page still shows something
       // useful when the live model service is asleep.
       try {
-        const snapshot = await api.get('/insights/owner/forecasts/latest');
-        const mapped = (snapshot.data?.products || []).map((row) => ({
+        const snapshot = await loadGet('forecasts:latest', '/insights/owner/forecasts/latest');
+        const mapped = (snapshot?.products || []).map((row) => ({
           product: row.product_name,
           category: row.category,
           ensemble_total_5d: row.ensemble_total_5d,
@@ -146,7 +147,7 @@ export function Forecasts() {
         title="Demand forecasts"
         description="What the model expects each product to sell over the next five days. Select any row to see its accuracy and daily breakdown."
         actions={
-          <Button size="sm" icon={RefreshCw} onClick={load} loading={loading}>
+          <Button size="sm" icon={RefreshCw} onClick={() => load(true)} loading={loading}>
             Refresh
           </Button>
         }

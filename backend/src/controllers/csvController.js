@@ -1,6 +1,8 @@
 import csv from 'csv-parser';
 import { Readable } from 'stream';
 import { supabaseAdmin } from '../config/db.js';
+import { fetchAllRows } from '../utils/fetchAllRows.js';
+import { cached, invalidateCache } from '../utils/cache.js';
 
 const REQUIRED_COLUMNS = [
   'sale_date',
@@ -17,6 +19,10 @@ const OPTIONAL_COLUMNS = ['customer_id'];
 const FORBIDDEN_COLUMNS = ['id', 'created_at', 'uploaded_by'];
 
 const BATCH_SIZE = 800;
+
+/** How many sales line items a single /records response will carry. */
+const DEFAULT_RECORD_LIMIT = 2000;
+const MAX_RECORD_LIMIT = 20000;
 
 function chunkArray(array, size) {
   const chunks = [];
@@ -185,6 +191,10 @@ export async function uploadCSV(req, res) {
       duration_seconds: parseFloat(duration)
     }]);
 
+    // New sales invalidate every cached aggregate, so the uploader sees their
+    // data on the dashboard immediately rather than after a TTL elapses.
+    invalidateCache();
+
     res.status(201).json({
       message: `Successfully uploaded ${rows.length} rows`,
       duration: `${duration} seconds`,
@@ -237,15 +247,16 @@ export async function getSalesRecords(req, res) {
     const categoryFilters = toArray(category).map(v => v.toLowerCase());
     const transactionFilters = toArray(transaction).map(v => v.toLowerCase());
 
-    let query = supabaseAdmin.from('daily_sales').select('*');
+    // Paginated: filtering and sorting happen in JS below, so a 1000-row cap
+    // here would silently hide matching records and skew the on-screen totals.
+    const records = await fetchAllRows(() => {
+      let query = supabaseAdmin.from('daily_sales').select('*');
+      if (startDate) query = query.gte('sale_date', startDate);
+      if (endDate) query = query.lte('sale_date', endDate);
+      return query.order('id', { ascending: true });
+    });
 
-    if (startDate) query = query.gte('sale_date', startDate);
-    if (endDate) query = query.lte('sale_date', endDate);
-
-    const { data: records, error } = await query;
-    if (error) return res.status(400).json({ message: error.message });
-
-    let filteredRecords = (records || []).filter(row => {
+    let filteredRecords = records.filter(row => {
       const productMatch = !productFilters.length || productFilters.some(f => row.product_name?.toLowerCase().includes(f));
       const categoryMatch = !categoryFilters.length || categoryFilters.some(f => row.category?.toLowerCase().includes(f));
       const transactionMatch = !transactionFilters.length || transactionFilters.some(f => row.transaction_id?.toLowerCase().includes(f));
@@ -260,24 +271,66 @@ export async function getSalesRecords(req, res) {
       return asc ? String(av).localeCompare(bv) : String(bv).localeCompare(av);
     });
 
-    res.json({ records: filteredRecords });
+    // Totals are computed over the COMPLETE filtered set, then the payload is
+    // capped. A year of sales is tens of thousands of line items; shipping them
+    // all was megabytes of JSON per page view, and the client cannot usefully
+    // display them at once either. `limit=0` opts out, which the CSV export
+    // uses so a download is still the full result.
+    const totals = filteredRecords.reduce(
+      (acc, row) => {
+        acc.revenue += Number(row.total_price || 0);
+        acc.units += Number(row.quantity || 0);
+        acc.transactions.add(row.transaction_id);
+        acc.products.add(row.product_name);
+        return acc;
+      },
+      { revenue: 0, units: 0, transactions: new Set(), products: new Set() }
+    );
 
-  } catch {
+    const requestedLimit = req.query.limit === undefined ? DEFAULT_RECORD_LIMIT : Number(req.query.limit);
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, MAX_RECORD_LIMIT)
+      : requestedLimit === 0
+        ? filteredRecords.length
+        : DEFAULT_RECORD_LIMIT;
+
+    const page = filteredRecords.slice(0, limit);
+
+    res.json({
+      records: page,
+      total: filteredRecords.length,
+      returned: page.length,
+      truncated: page.length < filteredRecords.length,
+      totals: {
+        revenue: Number(totals.revenue.toFixed(2)),
+        units: totals.units,
+        transactions: totals.transactions.size,
+        products: totals.products.size,
+      },
+    });
+
+  } catch (err) {
+    console.error('getSalesRecords', err);
     res.status(500).json({ message: 'Could not fetch sales records' });
   }
 }
 
 export async function getSaleCategories(req, res) {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('daily_sales')
-      .select('category')
-      .not('category', 'is', null)
-      .neq('category', '');
-
-    if (error) return res.status(400).json({ message: error.message });
-
-    const categories = Array.from(new Set((data || []).map(row => row.category))).sort();
+    // Every distinct category has to be seen, so this pages the whole column —
+    // otherwise the filter dropdown only lists categories from the first 1000
+    // rows. Cached for longer than the KPIs: the category set almost never moves.
+    const categories = await cached('sales:categories', 5 * 60_000, async () => {
+      const data = await fetchAllRows(() =>
+        supabaseAdmin
+          .from('daily_sales')
+          .select('category')
+          .not('category', 'is', null)
+          .neq('category', '')
+          .order('id', { ascending: true })
+      );
+      return Array.from(new Set(data.map(row => row.category))).sort();
+    });
     res.json({ categories });
 
   } catch {

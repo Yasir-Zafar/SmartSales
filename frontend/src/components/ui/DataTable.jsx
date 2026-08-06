@@ -1,16 +1,29 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { SkeletonTable } from './Skeleton';
 import { EmptyState } from './EmptyState';
+import { num } from '../../lib/format';
 
 /**
  * The app's one table.
  *
  * Ten screens used to hand-roll a <table> each, so sorting, empty states and
  * sticky headers behaved differently everywhere. Columns are declared as data;
- * sorting, alignment, numeric formatting and virtualised page-size come free.
+ * sorting, alignment and numeric formatting come free.
+ *
+ * Rows are PAGED, and that is not cosmetic. The sales explorer legitimately
+ * returns tens of thousands of line items, and rendering them all — each as an
+ * animated element — locked up the browser hard enough for the tab to need
+ * killing. Aggregates upstream are still computed over the complete set; only
+ * the DOM is bounded.
  */
+
+const DEFAULT_PAGE_SIZE = 50;
+
+/** Above this many rows, per-row entry animation is dropped — the stagger costs
+ *  more than it adds once a page is full of data. */
+const ANIMATE_MAX = 60;
 
 export function DataTable({
   columns,
@@ -24,8 +37,11 @@ export function DataTable({
   onRowClick,
   className = '',
   caption,
+  pageSize = DEFAULT_PAGE_SIZE,
+  paginate = true,
 }) {
   const [sort, setSort] = useState(initialSort || null);
+  const [page, setPage] = useState(0);
 
   const sortedRows = useMemo(() => {
     if (!sort) return rows;
@@ -46,6 +62,21 @@ export function DataTable({
     });
   }, [rows, sort, columns]);
 
+  const totalRows = sortedRows.length;
+  const pageCount = paginate ? Math.max(1, Math.ceil(totalRows / pageSize)) : 1;
+  const safePage = Math.min(page, pageCount - 1);
+
+  const visibleRows = useMemo(
+    () => (paginate ? sortedRows.slice(safePage * pageSize, safePage * pageSize + pageSize) : sortedRows),
+    [sortedRows, paginate, safePage, pageSize]
+  );
+
+  // Re-filtering or re-sorting should drop you back to the first page rather
+  // than stranding you on a page that no longer exists.
+  useEffect(() => {
+    setPage(0);
+  }, [totalRows, sort]);
+
   const toggleSort = (column) => {
     if (column.sortable === false) return;
     setSort((current) => {
@@ -64,10 +95,12 @@ export function DataTable({
   }
 
   const cellPad = dense ? 'px-3 py-2' : 'px-4 py-3';
+  const animateRows = visibleRows.length <= ANIMATE_MAX;
 
   return (
+    <div className={className}>
     <div
-      className={`overflow-auto rounded-xl border border-hairline/8 ${className}`}
+      className="overflow-auto rounded-xl border border-hairline/8"
       style={maxHeight ? { maxHeight } : undefined}
     >
       <table className="w-full border-collapse text-left text-[13px]">
@@ -108,13 +141,20 @@ export function DataTable({
         </thead>
 
         <tbody>
-          {sortedRows.map((row, index) => (
-            <motion.tr
+          {visibleRows.map((row, index) => {
+            const Row = animateRows ? motion.tr : 'tr';
+            const animationProps = animateRows
+              ? {
+                  initial: { opacity: 0 },
+                  animate: { opacity: 1 },
+                  transition: { duration: 0.24, delay: Math.min(index * 0.012, 0.28) },
+                }
+              : {};
+
+            return (
+            <Row
               key={rowKey(row, index)}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              // Cap the cascade so a 500-row table is not still fading in after a second.
-              transition={{ duration: 0.24, delay: Math.min(index * 0.012, 0.28) }}
+              {...animationProps}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               className={[
                 'border-b border-hairline/6 last:border-0 transition-colors',
@@ -133,10 +173,45 @@ export function DataTable({
                   </td>
                 );
               })}
-            </motion.tr>
-          ))}
+            </Row>
+            );
+          })}
         </tbody>
       </table>
+    </div>
+
+    {paginate && pageCount > 1 && (
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[12px] text-ink-faint tabular">
+          Showing {num(safePage * pageSize + 1)}–{num(Math.min((safePage + 1) * pageSize, totalRows))} of{' '}
+          {num(totalRows)}
+        </p>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-hairline/12 px-2.5 text-[12px] text-ink-soft transition-colors hover:bg-hairline/8 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft size={13} aria-hidden="true" /> Prev
+          </button>
+
+          <span className="px-1 text-[12px] text-ink-muted tabular">
+            {safePage + 1} / {num(pageCount)}
+          </span>
+
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={safePage >= pageCount - 1}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-hairline/12 px-2.5 text-[12px] text-ink-soft transition-colors hover:bg-hairline/8 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Next <ChevronRight size={13} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

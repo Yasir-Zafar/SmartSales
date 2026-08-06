@@ -69,7 +69,10 @@ router.get('/alerts/history/abnormal-drops', authenticateToken, authorizeRoles('
 router.get('/alerts/dropped-status', authenticateToken, authorizeRoles('ANALYST', 'OWNER', 'ADMIN'), droppedStatus);
 
 // Staff: simplified inventory risk guidance
-router.get('/staff/inventory/risk', authenticateToken, authorizeRoles('STAFF', 'ADMIN'), staffInventoryRisk);
+// OWNER included: the owner overview shows a high-risk stock panel and the
+// /inventory page (open to OWNER) has a restock tab backed by this endpoint.
+// Without it the UI offers a view the API then refuses with a 403.
+router.get('/staff/inventory/risk', authenticateToken, authorizeRoles('STAFF', 'OWNER', 'ADMIN'), staffInventoryRisk);
 
 // Staff: customer segment + upsell hint (customerId currently maps to ML customer_id)
 router.get('/staff/customers/:customerId/upsell', authenticateToken, authorizeRoles('STAFF', 'ADMIN'), staffCustomerUpsell);

@@ -18,7 +18,8 @@ import {
   XCircle,
 } from 'lucide-react';
 
-import { api, errorMessage } from '../lib/api';
+import { errorMessage } from '../lib/api';
+import { loadGet } from '../lib/dataCache';
 import { money, num, relativeTime, titleCase, date } from '../lib/format';
 import { staggerParent, staggerChild } from '../lib/motion';
 import { useAuth } from '../context/AuthContext';
@@ -172,12 +173,12 @@ function OwnerOverview() {
   const load = useCallback(async () => {
     setError('');
     try {
-      const [kpiRes, forecastRes] = await Promise.all([
-        api.get('/insights/owner/kpis/live'),
-        api.get('/insights/owner/forecasts/latest'),
+      const [kpiData, forecastData] = await Promise.all([
+        loadGet('kpis', '/insights/owner/kpis/live', undefined, { ttl: 30_000 }),
+        loadGet('forecasts:latest', '/insights/owner/forecasts/latest'),
       ]);
-      setKpis(kpiRes.data);
-      setForecasts(forecastRes.data?.products || []);
+      setKpis(kpiData);
+      setForecasts(forecastData?.products || []);
     } catch (err) {
       setError(errorMessage(err, 'Could not load your live figures'));
     } finally {
@@ -187,16 +188,16 @@ function OwnerOverview() {
     // The two ML-backed panels fail independently — one being down should not
     // blank the whole dashboard.
     try {
-      const riskRes = await api.get('/insights/staff/inventory/risk');
-      setRisks(riskRes.data?.risks || []);
+      const riskData = await loadGet('inventory:risk', '/insights/staff/inventory/risk');
+      setRisks(riskData?.risks || []);
     } catch {
       setRisks([]);
     }
     try {
-      const anomalyRes = await api.get('/insights/alerts/notifications/abnormal-drops', {
+      const anomalyData = await loadGet('anomalies:active', '/insights/alerts/notifications/abnormal-drops', {
         params: { notify_owner: true },
       });
-      setAnomalies(Number(anomalyRes.data?.count || 0));
+      setAnomalies(Number(anomalyData?.count || 0));
     } catch {
       setAnomalies(0);
     }
@@ -403,8 +404,13 @@ function AnalystOverview() {
     setLoadingProducts(true);
     setProductsError('');
     try {
-      const res = await api.get('/csv/records', { params: { sortBy: 'sales', order: 'desc' } });
-      const totals = (res.data.records || []).reduce((acc, row) => {
+      // limit=0: this aggregates every row into a top-ten ranking, so a capped
+      // response would quietly rank only part of the catalog. It renders ten
+      // bars, not ten thousand rows, so only the payload is affected.
+      const data = await loadGet('records:top', '/csv/records', {
+        params: { sortBy: 'sales', order: 'desc', limit: 0 },
+      });
+      const totals = (data.records || []).reduce((acc, row) => {
         const name = row.product_name || 'Unknown';
         acc[name] = (acc[name] || 0) + (row.quantity || 0);
         return acc;
@@ -426,8 +432,8 @@ function AnalystOverview() {
     setLoadingSegments(true);
     setSegmentsFailed(false);
     try {
-      const res = await api.get('/insights/analyst/segments');
-      setSegments(res.data?.segments || []);
+      const data = await loadGet('segments:profiles', '/insights/analyst/segments');
+      setSegments(data?.segments || []);
     } catch {
       setSegmentsFailed(true);
       setSegments([]);
@@ -439,9 +445,8 @@ function AnalystOverview() {
   useEffect(() => {
     loadProducts();
     loadSegments();
-    api
-      .get('/insights/alerts/notifications/abnormal-drops')
-      .then((res) => setAnomalies(Number(res.data?.count || 0)))
+    loadGet('anomalies:active', '/insights/alerts/notifications/abnormal-drops')
+      .then((data) => setAnomalies(Number(data?.count || 0)))
       .catch(() => setAnomalies(0));
   }, [loadProducts, loadSegments]);
 
@@ -569,8 +574,8 @@ function StaffOverview() {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get('/insights/staff/sales-summary');
-      setSummary(res.data);
+      const data = await loadGet('sales:summary', '/insights/staff/sales-summary');
+      setSummary(data);
     } catch (err) {
       setError(errorMessage(err, 'Could not load the sales summary'));
     } finally {
@@ -713,8 +718,8 @@ function AdminOverview() {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get('/csv');
-      setUploads(res.data?.uploads || []);
+      const data = await loadGet('uploads', '/csv');
+      setUploads(data?.uploads || []);
     } catch (err) {
       setError(errorMessage(err, 'Could not load upload history'));
     } finally {

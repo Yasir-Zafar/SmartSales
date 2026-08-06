@@ -16,19 +16,82 @@ async function ensureDir() {
   await fs.mkdir(dataDir, { recursive: true });
 }
 
+/**
+ * Per-file write queue.
+ *
+ * These stores are read-modify-write over a JSON file, and the anomalies page
+ * hits several of them at once (the notifications call appends history while
+ * the history call reads it). Without serialising, concurrent appends lost
+ * each other's events.
+ */
+const writeQueues = new Map();
+
+function withFileLock(filePath, task) {
+  const previous = writeQueues.get(filePath) || Promise.resolve();
+  // Swallow the predecessor's rejection so one failure cannot poison the chain.
+  const next = previous.catch(() => {}).then(task);
+  writeQueues.set(
+    filePath,
+    next.catch(() => {})
+  );
+  return next;
+}
+
 async function readJson(filePath, fallback) {
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(raw);
   } catch (err) {
     if (err?.code === 'ENOENT') return fallback;
+    // A malformed or half-written file must not take an endpoint down with a
+    // 500 — the alert history is derived data and can be rebuilt by the next
+    // detection run.
+    if (err instanceof SyntaxError) {
+      console.warn(`[alertingStore] ${path.basename(filePath)} was unreadable; starting fresh.`);
+      return fallback;
+    }
     throw err;
   }
 }
 
+/**
+ * Writes via a temp file + rename. `fs.writeFile` truncates first, so a reader
+ * landing mid-write saw an empty or partial file and threw a JSON parse error.
+ * Rename is atomic within a filesystem, so a reader sees either the old file or
+ * the new one — never a torn one.
+ *
+ * The temp name must be unique PER CALL, not just per process: two concurrent
+ * writers sharing one temp path meant the first rename moved the file out from
+ * under the second, which then failed with ENOENT and surfaced as a 500.
+ */
+let tempCounter = 0;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function writeJson(filePath, data) {
   await ensureDir();
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  const temp = `${filePath}.${process.pid}.${Date.now()}.${tempCounter++}.tmp`;
+  try {
+    await fs.writeFile(temp, JSON.stringify(data, null, 2), 'utf-8');
+
+    // Windows refuses to rename over a file another handle currently has open
+    // (EPERM/EBUSY) — a concurrent reader, or an antivirus scanner, is enough.
+    // The condition is transient, so retry briefly before giving up.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await fs.rename(temp, filePath);
+        return;
+      } catch (err) {
+        const transient = err?.code === 'EPERM' || err?.code === 'EBUSY' || err?.code === 'EACCES';
+        if (!transient || attempt >= 5) throw err;
+        await sleep(15 * (attempt + 1));
+      }
+    }
+  } catch (err) {
+    // Never leave a stray temp file behind if the write or rename failed.
+    await fs.unlink(temp).catch(() => {});
+    throw err;
+  }
 }
 
 function normalizeThresholdNumber(value) {
@@ -73,6 +136,12 @@ export function classifyAlertSeverity(dropPct, thresholds) {
 
 export async function appendAlertHistory(events) {
   if (!Array.isArray(events) || events.length === 0) return;
+  // Serialised: the read and the write must be one indivisible step, or two
+  // concurrent detection runs each overwrite the other's appended events.
+  return withFileLock(historyFile, () => appendAlertHistoryLocked(events));
+}
+
+async function appendAlertHistoryLocked(events) {
   const prior = await readJson(historyFile, []);
   const now = new Date().toISOString();
   const withTimestamps = events.map((event) => ({
@@ -102,13 +171,17 @@ export async function appendAlertHistory(events) {
 }
 
 export async function getAlertHistory(limit = 500) {
-  const rows = await readJson(historyFile, []);
+  // Reads share the write lock so this process never holds the file open while
+  // an append tries to rename over it — which on Windows fails outright.
+  const rows = await withFileLock(historyFile, () => readJson(historyFile, []));
   const safeLimit = Math.max(1, Math.min(Number(limit) || 500, 2000));
   return rows.slice(-safeLimit).reverse();
 }
 
 export async function getLastAlertCount() {
-  const state = await readJson(countStateFile, { count: null, updated_at: null });
+  const state = await withFileLock(countStateFile, () =>
+    readJson(countStateFile, { count: null, updated_at: null })
+  );
   const count = Number(state?.count);
   return {
     count: Number.isFinite(count) ? count : null,
@@ -122,7 +195,7 @@ export async function setLastAlertCount(count) {
     count: Number.isFinite(n) ? n : null,
     updated_at: new Date().toISOString(),
   };
-  await writeJson(countStateFile, next);
+  await withFileLock(countStateFile, () => writeJson(countStateFile, next));
   return next;
 }
 

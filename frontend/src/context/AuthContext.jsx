@@ -7,6 +7,7 @@ import {
   onSessionEnded,
   refreshSession,
 } from '../lib/api';
+import { resetPrefetch } from '../lib/dataCache';
 
 const AuthContext = createContext(null);
 
@@ -39,8 +40,14 @@ export const AuthProvider = ({ children }) => {
   const applyUser = useCallback((nextUser) => {
     setUser(nextUser);
     setStatus(nextUser ? 'authenticated' : 'anonymous');
-    if (nextUser) markSessionEstablished();
-    else clearSessionEstablished();
+    if (nextUser) {
+      markSessionEstablished();
+    } else {
+      clearSessionEstablished();
+      // Drop every prefetched dataset so the next person to sign in on this
+      // browser cannot be served the previous user's data from memory.
+      resetPrefetch();
+    }
   }, []);
 
   // Boot: ask the server who we are. A 401 here just means "not signed in".

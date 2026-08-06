@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { ALL_NAV_ITEMS } from '../../lib/nav';
 import { api } from '../../lib/api';
+import { prefetchForRole } from '../../lib/dataCache';
 import { DURATION, EASE, pageVariants } from '../../lib/motion';
 
 /**
@@ -69,6 +70,13 @@ export function AppShell() {
 
   // Close the mobile drawer whenever the route changes.
   useEffect(() => setDrawerOpen(false), [location.pathname]);
+
+  // Warm every dataset this role is likely to open, the moment the shell
+  // mounts. Model-backed pages are the slow ones, so paying for them once in
+  // the background beats paying on each tab switch.
+  useEffect(() => {
+    if (role) prefetchForRole(role);
+  }, [role]);
 
   // Shared anomaly count for the bell badge and the sidebar dot.
   useEffect(() => {
