@@ -1,15 +1,42 @@
 # SmartSales
 
-A sales-intelligence platform for a shop or small chain: a React frontend, an Express API, and a Python/PyTorch model service, backed by Postgres (Supabase). Upload a daily sales CSV and the rest is derived from it — five-day demand forecasts per product, anomaly detection against each product's own baseline, RFM customer segmentation, and restock guidance — surfaced differently to each of four roles, with access enforced server-side and the interface generated from that same role definition.
+A sales-intelligence platform for a shop or small chain: a React frontend, an Express API, and a Python/PyTorch model service, backed by Postgres (Supabase). Upload a daily sales CSV and the rest is derived from it — five-day demand forecasts per product, anomaly detection against each product's own baseline, RFM customer segmentation, and restock guidance — surfaced differently to each of four roles, with access enforced server-side.
 
-## What it does
+<img src="docs/screenshots/login.jpg" alt="SmartSales sign-in screen" width="100%">
 
-- **What will sell** — an LSTM and a seasonal model each forecast five days out per product; the app shows their blended ensemble.
-- **What's about to go wrong** — each forecast is compared against its own historical baseline; a big enough drop is flagged, with severity scaled off an owner-set threshold. A second guard watches total forecast revenue.
-- **Who's buying, and what next** — customers are clustered on recency, frequency and spend into five ordered tiers (Champions → Loyal → Potential Loyalists → At Risk → Lost), each with a recommended action and the products that tier actually buys.
-- **What to restock** — predicted demand plus sales volatility becomes a shortage risk, shown to staff as a plain sentence rather than a number to interpret.
+## Getting started
 
-**Pipeline:** staff upload a CSV → rows land in `daily_sales` → an analyst picks a date window and reloads the model with it → each reload snapshots every product's forecast into Postgres → every screen reads from there. Nothing in the interface invents a number; each one traces back to an uploaded row or a saved model run.
+### Prerequisites
+- Node.js 18+
+- Python 3.9+
+- A Supabase Postgres project
+
+### One-time database step
+Run `backend/schema.sql` then `backend/migrations/002_auth_sessions.sql` in the Supabase SQL editor — the auth layer needs the `token_version` column and the `auth_sessions`/`auth_events` tables.
+
+### Install
+```bash
+git clone https://github.com/Yasir-Zafar/SmartSales.git
+cd SmartSales
+
+cd backend && npm install
+cd ../frontend && npm install
+cd ../ml && pip install -r requirements.txt
+```
+
+### Run (three processes)
+```bash
+# 1 — model service, from ml/
+uvicorn app:app --host 0.0.0.0 --port 8000
+
+# 2 — API, from backend/
+npm run dev
+
+# 3 — frontend, from frontend/
+npm start
+```
+
+Create a `.env` in both `backend/` and `ml/` with your own Supabase credentials and JWT signing secrets — see `backend/src/config` and `ml/database.py` for the exact variable names each service reads.
 
 ## Tech stack
 
@@ -21,9 +48,28 @@ A sales-intelligence platform for a shop or small chain: a React frontend, an Ex
 | Database | Postgres (Supabase)                   |
 | Auth     | JWT access + refresh cookies, rotation, CSRF, rate limiting |
 
+## What it does
+
+- **What will sell** — an LSTM and a seasonal model each forecast five days out per product; the app shows their blended ensemble.
+- **What's about to go wrong** — each forecast is compared against its own historical baseline; a big enough drop is flagged, with severity scaled off an owner-set threshold. A second guard watches total forecast revenue.
+- **Who's buying, and what next** — customers are clustered on recency, frequency and spend into five ordered tiers (Champions → Loyal → Potential Loyalists → At Risk → Lost), each with a recommended action and the products that tier actually buys.
+- **What to restock** — predicted demand plus sales volatility becomes a shortage risk, shown to staff as a plain sentence rather than a number to interpret.
+
+**Pipeline:** staff upload a CSV → rows land in `daily_sales` → an analyst picks a date window and reloads the model with it → each reload snapshots every product's forecast into Postgres → every screen reads from there. Nothing in the interface invents a number; each one traces back to an uploaded row or a saved model run.
+
+<p align="center">
+  <img src="docs/screenshots/owner-overview.jpg" alt="Owner overview dashboard" width="49%">
+  <img src="docs/screenshots/forecast-detail.jpg" alt="Per-product forecast detail" width="49%">
+</p>
+
 ## Roles & permissions
 
 Access is enforced on the server, per endpoint — the sidebar, command palette and route guards all read one shared role definition, so the UI never shows a control it would be refused for. Admin isn't a superset by accident: every insight route lists `ADMIN` alongside its owning role, so an administrator can reproduce what a user sees without borrowing their account.
+
+<p align="center">
+  <img src="docs/screenshots/customer-segments.jpg" alt="Customer segmentation view" width="49%">
+  <img src="docs/screenshots/team.jpg" alt="Admin team directory" width="49%">
+</p>
 
 ### Owner
 The person who cares about the money. Reads everything about performance; changes nothing about data.
@@ -41,7 +87,8 @@ Uploads the daily sales CSV (the only role that can) · today's/this week's taki
 The person who controls who gets in. Also holds every other role's read access, for support.
 Creates owner/analyst/staff accounts · changes roles (incl. promoting to admin) · resets passwords (signs that person out everywhere) · deactivates accounts (ends sessions immediately) · sees full upload history and ingestion health · reaches every insight page the other three roles have.
 
-### Permission matrix
+<details>
+<summary><strong>Full permission matrix</strong> — every endpoint mapped to the roles that can call it</summary>
 
 A `·` means the server returns `403 FORBIDDEN_ROLE` — not that a button is merely hidden.
 
@@ -83,6 +130,8 @@ A `·` means the server returns `403 FORBIDDEN_ROLE` — not that a button is me
 | Reset someone's password | `PATCH /api/admin/users/:id/password` | · | · | · | ✓ |
 | Activate / deactivate an account | `PATCH /api/admin/users/:id/status` | · | · | · | ✓ |
 
+</details>
+
 ## Screens
 
 One shell hosts every page — grouped sidebar, persistent top bar, `⌘K` command palette listing every action the signed-in role has. AI-backed data (forecasts, anomalies, segments, inventory risk) prefetches in the background the moment you sign in, so opening a tab renders from memory instead of waiting on the model service.
@@ -100,40 +149,6 @@ One shell hosts every page — grouped sidebar, persistent top bar, `⌘K` comma
 | `/settings` | all | Theme, own password change, active-session management |
 
 Every dead end is designed for: skeletons instead of spinners, a named "AI service is offline" state with the exact command to start it, wrong-role pages that explain what you're missing rather than bouncing you out, and destructive actions gated behind a confirmation dialog.
-
-## Getting started
-
-### Prerequisites
-- Node.js 18+
-- Python 3.9+
-- A Supabase Postgres project
-
-### One-time database step
-Run `backend/schema.sql` then `backend/migrations/002_auth_sessions.sql` in the Supabase SQL editor — the auth layer needs the `token_version` column and the `auth_sessions`/`auth_events` tables.
-
-### Install
-```bash
-git clone https://github.com/Yasir-Zafar/SmartSales.git
-cd SmartSales
-
-cd backend && npm install
-cd ../frontend && npm install
-cd ../ml && pip install -r requirements.txt
-```
-
-### Run (three processes)
-```bash
-# 1 — model service, from ml/
-uvicorn app:app --host 0.0.0.0 --port 8000
-
-# 2 — API, from backend/
-npm run dev
-
-# 3 — frontend, from frontend/
-npm start
-```
-
-Create a `.env` in both `backend/` and `ml/` with your own Supabase credentials and JWT signing secrets — see `backend/src/config` and `ml/database.py` for the exact variable names each service reads.
 
 ## Contributing
 
